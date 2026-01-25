@@ -2,15 +2,18 @@ import streamlit as st
 from huggingface_hub import InferenceClient
 
 # --- CONFIGURATION ---
-# Put your token inside the quotes below
-MY_HF_TOKEN = "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" 
+# We use st.secrets so your token stays hidden from GitHub!
+try:
+    MY_HF_TOKEN = st.secrets["HF_TOKEN"]
+except Exception:
+    st.error("Error: HF_TOKEN not found in Streamlit Secrets!")
+    st.stop()
+
 MODEL_NAME = "Qwen/Qwen2.5-Coder-32B-Instruct"
-# ---------------------
 
 st.set_page_config(page_title="amek AI", layout="centered")
 st.title("🤖 ephrem AI Assistant")
 
-# We no longer ask for a token in the UI
 client = InferenceClient(api_key=MY_HF_TOKEN)
 
 if "messages" not in st.session_state:
