@@ -3,7 +3,7 @@ from huggingface_hub import InferenceClient
 
 # --- CONFIGURATION ---
 # Put your token inside the quotes below
-MY_HF_TOKEN = "your_token_here" 
+MY_HF_TOKEN = "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" 
 MODEL_NAME = "Qwen/Qwen2.5-Coder-32B-Instruct"
 # ---------------------
 
