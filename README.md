@@ -12,5 +12,5 @@ A lightweight, web-based chatbot built with **Python**, **Streamlit**, and the *
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/YOUR_USERNAME/my-ai-bot.git](https://github.com/YOUR_USERNAME/my-ai-bot.git)
+   git clone [https://github.com/ephrem823/my-ai-bot.git](https://github.com/ephrem823/my-ai-bot.git)
    cd my-ai-bot
