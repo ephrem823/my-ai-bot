@@ -1,96 +1,105 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
+import concurrent.futures
+import time
 
-# - CONFIGURATION & MODELS -
+# --- 1. CONFIGURATION ---
 MODELS = {
-    "Qwen 2.5 Coder (Best All-Rounder)": "Qwen/Qwen2.5-Coder-32B-Instruct",
-    "DeepSeek V3.2 (Advanced Logic)": "deepseek-ai/DeepSeek-V3.2",
-    "GLM 4.7 Flash (Fast & Precise)": "zai-org/GLM-4.7-Flash"
+    "qwen": "Qwen/Qwen2.5-Coder-32B-Instruct",
+    "deepseek": "deepseek-ai/DeepSeek-V3.2",
+    "glm": "zai-org/GLM-4.7-Flash"
 }
 
-# --- PAGE SETUP ---
-st.set_page_config(page_title="amek AI Assistant", layout="wide")
-st.title("🤖 ephrem AI Coding Assistant")
+st.set_page_config(page_title="ephrem AI SuperBrain", layout="wide")
 
-# --- SECRETS CHECK ---
-try:
-    MY_HF_TOKEN = st.secrets["HF_TOKEN"]
-except Exception:
-    st.error("⚠️ HF_TOKEN not found! Please add it to Streamlit Secrets.")
-    st.stop()
+# Custom CSS to make the Sidebar look like a History Panel
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { background-color: #161b22; min-width: 250px; }
+    .stButton>button { width: 100%; text-align: left; border: none; background: transparent; color: #c9d1d9; }
+    .stButton>button:hover { background: #21262d; color: #58a6ff; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- SIDEBAR SETTINGS ---
-with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    # Model Selection Dropdown
-    selected_model_display = st.selectbox("Choose AI Brain:", list(MODELS.keys()))
-    MODEL_NAME = MODELS[selected_model_display]
-    
-    st.divider()
-    
-    # Clear Chat Button
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.info(f"Currently using: \n**{selected_model_display}**")
-
-# --- INITIALIZE CHAT ---
-client = InferenceClient(api_key=MY_HF_TOKEN)
-
+# --- 2. SESSION INITIALIZATION ---
+if "all_chats" not in st.session_state:
+    st.session_state.all_chats = {} # Stores { "Title": [messages] }
+if "current_chat_title" not in st.session_state:
+    st.session_state.current_chat_title = "New Chat"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display history with automatic Copy Buttons
-for i, message in enumerate(st.session_state.messages):
-    with st.chat_message(message["role"]):
-        if message["role"] == "assistant":
-            # Using .code() ensures the entire message has a copy button
-            st.code(message["content"], language="markdown")
-        else:
-            st.markdown(message["content"])
+# --- 3. SIDEBAR (HISTORY VIEW) ---
+with st.sidebar:
+    st.title("📜 History")
+    if st.button("➕ New Chat"):
+        # Save old chat before resetting
+        if st.session_state.messages:
+            st.session_state.all_chats[st.session_state.current_chat_title] = st.session_state.messages
+        st.session_state.messages = []
+        st.session_state.current_chat_title = f"Chat {len(st.session_state.all_chats) + 1}"
+        st.rerun()
+    
+    st.divider()
+    
+    # List previous chats
+    for title in list(st.session_state.all_chats.keys()):
+        if st.button(f"💬 {title}"):
+            st.session_state.current_chat_title = title
+            st.session_state.messages = st.session_state.all_chats[title]
+            st.rerun()
 
-# --- CHAT INPUT ---
-if prompt := st.chat_input("Ask me to write or debug code..."):
-    # Save user message
+# --- 4. MAIN CHAT LOGIC ---
+st.title(f"🧠 {st.session_state.current_chat_title}")
+
+try:
+    client = InferenceClient(api_key=st.secrets["HF_TOKEN"])
+except:
+    st.error("Missing HF_TOKEN!")
+    st.stop()
+
+# Display Current Messages
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        if msg["role"] == "assistant":
+            st.code(msg["content"], language="markdown")
+        else:
+            st.markdown(msg["content"])
+
+# Helper function for Parallel Calls
+def call_ai(model_id, user_prompt):
+    try:
+        resp = client.chat.completions.create(model=model_id, messages=[{"role": "user", "content": user_prompt}], max_tokens=800)
+        return resp.choices[0].message.content
+    except: return "Error"
+
+# --- 5. CHAT INPUT ---
+if prompt := st.chat_input("Consult the Ensemble..."):
+    # If this is the first message, rename the chat based on the prompt
+    if not st.session_state.messages:
+        st.session_state.current_chat_title = prompt[:25] + "..."
+    
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate Assistant Response
     with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        full_response = ""
+        status = st.status("🧠 Consulting Ensemble (Qwen + DeepSeek + GLM)...")
         
-        # System instructions to keep the AI focused
-        messages_for_api = [
-            {"role": "system", "content": "You are an expert senior software engineer. Provide clean, efficient code with clear step-by-step explanations."}
-        ]
-        
-        # Add history for context
-        for m in st.session_state.messages:
-            messages_for_api.append({"role": m["role"], "content": m["content"]})
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Call all models at once
+            futures = [executor.submit(call_ai, id, prompt) for id in MODELS.values()]
+            results = [f.result() for f in futures]
 
-        try:
-            stream = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages_for_api,
-                max_tokens=2000,
-                stream=True
-            )
-            
-            for chunk in stream:
-                if chunk.choices and len(chunk.choices) > 0:
-                    content = chunk.choices[0].delta.content
-                    if content:
-                        full_response += content
-                        # Display markdown stream while typing
-                        response_placeholder.markdown(full_response + "▌")
-            
-            # Finalize with st.code to add the COPY BUTTON
-            response_placeholder.code(full_response, language="markdown")
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-            
-        except Exception as e:
-            st.error(f"API Error: {e}. Try switching to a different model in the sidebar.")
+        status.update(label="✍️ Merging Insights...", state="running")
+        
+        # Merge Step
+        merge_prompt = f"Combine these 3 AI answers into one best response. Be concise:\n1:{results[0]}\n2:{results[1]}\n3:{results[2]}"
+        final_answer = call_ai(MODELS["deepseek"], merge_prompt)
+        
+        status.update(label="✅ Response Merged", state="complete")
+        st.code(final_answer, language="markdown")
+        
+        st.session_state.messages.append({"role": "assistant", "content": final_answer})
+        # Keep the history updated
+        st.session_state.all_chats[st.session_state.current_chat_title] = st.session_state.messages
