@@ -3,8 +3,8 @@ from huggingface_hub import InferenceClient
 import concurrent.futures
 import os
 
-# --- 1. RAG & ENSEMBLE IMPORTS ---
-from langchain_huggingface import HuggingFaceEmbeddings
+# --- 1. RAG & UTILITY IMPORTS ---
+from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
@@ -28,13 +28,26 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INITIALIZE MODELS & SESSION ---
+# --- 3. THE PYTHON 3.13 EMBEDDING FIX ---
 @st.cache_resource
 def load_embed_model():
-    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    # Load model directly via SentenceTransformer to avoid LangChain 3.13 TypeErrors
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    return model
 
-embed_model = load_embed_model()
+# Wrapper so FAISS sees it as a standard LangChain embedding object
+class EmbedderWrapper:
+    def __init__(self, model):
+        self.model = model
+    def embed_documents(self, texts):
+        return self.model.encode(texts).tolist()
+    def embed_query(self, text):
+        return self.model.encode([text])[0].tolist()
 
+raw_model = load_embed_model()
+embed_model = EmbedderWrapper(raw_model)
+
+# --- 4. SESSION INITIALIZATION ---
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 if "all_chats" not in st.session_state:
@@ -44,7 +57,7 @@ if "current_chat_title" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. SIDEBAR (HISTORY & RAG) ---
+# --- 5. SIDEBAR (HISTORY & RAG) ---
 with st.sidebar:
     st.title("📜 Chat History")
     if st.button("➕ New Chat"):
@@ -54,7 +67,6 @@ with st.sidebar:
         st.session_state.current_chat_title = f"Chat {len(st.session_state.all_chats) + 1}"
         st.rerun()
     
-    # List History
     for title in list(st.session_state.all_chats.keys()):
         if st.button(f"💬 {title[:20]}..."):
             st.session_state.current_chat_title = title
@@ -62,8 +74,6 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    
-    # RAG Section
     st.header("📂 Knowledge Base")
     uploaded_file = st.file_uploader("Upload PDF to teach AI", type=["pdf"])
     if uploaded_file and st.button("🧠 Teach the AI"):
@@ -74,28 +84,29 @@ with st.sidebar:
             docs = loader.load()
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             chunks = text_splitter.split_documents(docs)
+            # FAISS uses our wrapper here
             st.session_state.vectorstore = FAISS.from_documents(chunks, embed_model)
             st.success("Knowledge Ingested!")
 
-# --- 5. MAIN LOGIC ---
-st.title(f"🧠 {st.session_state.current_chat_title}")
-
+# --- 6. AI LOGIC ---
 try:
     client = InferenceClient(api_key=st.secrets["HF_TOKEN"])
 except:
-    st.error("Missing HF_TOKEN in Secrets!")
+    st.error("Missing HF_TOKEN!")
     st.stop()
 
 def call_ai(model_id, prompt_text, context=""):
-    system_instr = "You are a code generator. Provide ONLY code and bulleted descriptions. No small talk. Use the provided context if relevant."
+    system_instr = "Provide ONLY code and bulleted descriptions. No small talk. Use context if provided."
     full_prompt = f"Context: {context}\n\nQuestion: {prompt_text}" if context else prompt_text
     try:
-        messages = [{"role": "system", "content": system_instr}, {"role": "user", "content": full_prompt}]
-        resp = client.chat.completions.create(model=model_id, messages=messages, max_tokens=1000)
+        msg = [{"role": "system", "content": system_instr}, {"role": "user", "content": full_prompt}]
+        resp = client.chat.completions.create(model=model_id, messages=msg, max_tokens=1000)
         return resp.choices[0].message.content
     except: return ""
 
-# Display Chat
+# --- 7. CHAT INTERFACE ---
+st.title(f"🧠 {st.session_state.current_chat_title}")
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
@@ -103,8 +114,7 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-# Chat Input
-if prompt := st.chat_input("Hi or ask for code..."):
+if prompt := st.chat_input("Ask SuperBrain..."):
     if not st.session_state.messages:
         st.session_state.current_chat_title = prompt[:25]
     
@@ -113,25 +123,21 @@ if prompt := st.chat_input("Hi or ask for code..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # 1. Check for Greeting
         if prompt.lower().strip() in ["hi", "hello", "hey"]:
             final_answer = "hey"
             st.markdown(final_answer)
         else:
-            # 2. Get RAG Context
             context = ""
             if st.session_state.vectorstore:
-                docs = st.session_state.vectorstore.similarity_search(prompt, k=3)
-                context = "\n".join([d.page_content for d in docs])
+                search_docs = st.session_state.vectorstore.similarity_search(prompt, k=3)
+                context = "\n".join([d.page_content for d in search_docs])
 
-            # 3. Triple-Brain Ensemble
             with st.status("🧠 Consulting Triple-Brain Ensemble...") as status:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = [executor.submit(call_ai, id, prompt, context) for id in MODELS.values()]
                     results = [f.result() for f in futures]
                 
-                status.update(label="✍️ Merging Best Answers...", state="running")
-                merge_query = f"Merge these 3 solutions into one perfect code block + ### Logic Breakdown:\n1:{results[0]}\n2:{results[1]}\n3:{results[2]}"
+                merge_query = f"Merge these into one perfect code block + Logic Breakdown:\n1:{results[0]}\n2:{results[1]}\n3:{results[2]}"
                 final_answer = call_ai(MODELS["deepseek"], merge_query)
                 status.update(label="✅ Ready", state="complete")
             
