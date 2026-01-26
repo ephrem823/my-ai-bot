@@ -47,7 +47,7 @@ if prompt := st.chat_input("Ask your AI anything..."):
                         full_response += content
                         response_placeholder.markdown(full_response + "▌")
             
-            response_placeholder.markdown(full_response)
+            response_placeholder.st.code(full_response, language="markdown")
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
