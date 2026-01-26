@@ -2,7 +2,6 @@ import streamlit as st
 from huggingface_hub import InferenceClient
 
 # --- CONFIGURATION ---
-# We use st.secrets so your token stays hidden from GitHub!
 try:
     MY_HF_TOKEN = st.secrets["HF_TOKEN"]
 except Exception:
@@ -19,9 +18,14 @@ client = InferenceClient(api_key=MY_HF_TOKEN)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Display history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        if message["role"] == "assistant":
+            # Show history as code blocks so they have copy buttons
+            st.code(message["content"], language="markdown")
+        else:
+            st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask your AI anything..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -45,9 +49,12 @@ if prompt := st.chat_input("Ask your AI anything..."):
                     content = chunk.choices[0].delta.content
                     if content:
                         full_response += content
+                        
                         response_placeholder.markdown(full_response + "▌")
             
-            response_placeholder.st.code(full_response, language="markdown")
+           
+            response_placeholder.code(full_response, language="markdown")
+            
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
