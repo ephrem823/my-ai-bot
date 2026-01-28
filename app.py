@@ -17,7 +17,7 @@ MODELS = {
 }
 
 # --- 3. CUSTOM FRONTEND (CSS) ---
-st.set_page_config(page_title="VOID", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="AMEK", layout="wide", page_icon="🧠")
 
 st.markdown("""
     <style>
