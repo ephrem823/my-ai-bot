@@ -65,12 +65,7 @@ with st.sidebar:
         st.session_state.messages, st.session_state.current_chat_title = [], f"Chat {len(st.session_state.all_chats) + 1}"
         st.rerun()
 
-    # STOP BUTTON
-    st.markdown('<div class="stop-container">', unsafe_allow_html=True)
-    if st.button("🛑 STOP GENERATION"):
-        st.stop()
-    st.markdown('</div>', unsafe_allow_html=True)
-    
+   
     st.divider()
     st.markdown("### 📂 Knowledge Base")
     uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
@@ -78,7 +73,7 @@ with st.sidebar:
         with st.spinner("Analyzing PDF..."):
             with open("temp.pdf", "wb") as f: f.write(uploaded_file.getvalue())
             loader = PyPDFLoader("temp.pdf")
-            chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100).split_documents(loader.load())
+            chunks = RecursiveCharacterTextSplitter(chunk_size=1000000, chunk_overlap=10000).split_documents(loader.load())
             st.session_state.vectorstore = FAISS.from_documents(chunks, embed_model)
             st.success("Knowledge Ingested!")
 
