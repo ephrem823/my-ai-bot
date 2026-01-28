@@ -1,26 +1,39 @@
-# 🧠 ephrem AI SuperBrain (RAG Edition)
+# ⚡ AMEK_v1.0: Advanced Multi-model Ensemble Kernel
 
-A high-performance AI assistant that uses a **Triple-Brain Ensemble** (Qwen, DeepSeek, GLM) and **RAG (Retrieval-Augmented Generation)** to provide expert-level coding advice and document analysis.
+**AMEK** is a high-performance, code-centric AI assistant. It utilizes a **Triple-Brain Ensemble** architecture and **RAG (Retrieval-Augmented Generation)** to deliver precise, expert-level programming solutions while strictly filtering out non-technical queries.
 
-## 🚀 Key Features
+![AMEK Interface](https://img.shields.io/badge/Interface-Cyberpunk_Dark-blue?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
 
-* **Triple-Brain Ensemble:** Simultaneously queries three world-class models (`Qwen-2.5-Coder`, `DeepSeek-V3`, and `GLM-4`) and merges their outputs for the most accurate solution.
-* **Knowledge Base (RAG):** Upload any PDF, and the AI will "learn" its contents instantly to provide context-aware answers.
-* **Smart History:** Automatically saves and organizes your chat sessions in the sidebar.
-* **Python 3.13 Ready:** Custom embedding wrapper to ensure high performance on the latest Python environments.
-* **Clean UI:** Minimalist Dark Mode interface built with Streamlit.
+---
 
-## 🛠️ Tech Stack
+## 🚀 Core Technologies
 
-- **Frontend:** [Streamlit](https://streamlit.io/)
-- **LLM API:** [Hugging Face Inference API](https://huggingface.co/inference-api)
-- **RAG Framework:** [LangChain](https://www.langchain.com/)
-- **Vector Database:** [FAISS](https://github.com/facebookresearch/faiss)
-- **Embeddings:** `all-MiniLM-L6-v2` via `sentence-transformers`
+### 1. Triple-Brain Ensemble
+AMEK doesn't rely on just one model. It processes every coding request through three industry-leading models simultaneously:
+* **Qwen 2.5 Coder** (Instruction Following)
+* **DeepSeek V3** (Complex Logic & Merging)
+* **GLM 4.7** (Speed & Flash Reasoning)
 
-## 📦 Installation & Setup
+### 2. Knowledge Ingestion (RAG)
+By uploading documentation or project files in PDF format, AMEK uses **FAISS** vector storage and **SentenceTransformers** to search your private data before generating code. This ensures the AI knows *your* specific project rules.
 
-1. **Clone the repository:**
+
+
+### 3. Strict Coding Filter
+AMEK is built for work. It features a hard-coded rejection layer:
+* **Input:** Coding/Technical → **Full Execution**
+* **Input:** "Hi/Hey" → **Greeting**
+* **Input:** General Talk → **Rejection:** *"this ai is only for code except hey"*
+
+---
+
+## 🛠️ Installation
+
+1. **Clone the System:**
    ```bash
+   git clone [https://github.com/ephrem823/amek-ai.git](https://github.com/ephrem823/amek-ai.git)
+   cd amek-ai
    git clone [https://github.com/ephrem823/my-ai-bot.git](https://github.com/ephrem823/my-ai-bot.git)
    cd my-ai-bot
