@@ -22,5 +22,5 @@ A high-performance AI assistant that uses a **Triple-Brain Ensemble** (Qwen, Dee
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/your-username/my-ai-bot.git](https://github.com/your-username/my-ai-bot.git)
+   git clone [https://github.com/ephrem823/my-ai-bot.git](https://github.com/ephrem823/my-ai-bot.git)
    cd my-ai-bot
