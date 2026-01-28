@@ -21,49 +21,14 @@ st.set_page_config(page_title="AMEK", layout="wide", page_icon="🧠")
 
 st.markdown("""
     <style>
-    /* Main App Background */
-    .stApp {
-        background-color: #0d1117;
-        color: #c9d1d9;
-    }
-    
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: #161b22 !important;
-        border-right: 1px solid #30363d;
-    }
-    
-    /* Neon Glow Titles */
-    h1, h2, h3 {
-        color: #58a6ff !important;
-        text-shadow: 0px 0px 10px rgba(88, 166, 255, 0.3);
-    }
-    
-    /* Custom Chat Message Styling */
-    .stChatMessage {
-        border-radius: 15px;
-        padding: 10px;
-        margin-bottom: 10px;
-        border: 1px solid #30363d;
-    }
-    
-    /* Sidebar Buttons */
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        background-color: #21262d;
-        color: #c9d1d9;
-        border: 1px solid #30363d;
-        transition: 0.3s;
-    }
-    
-    .stButton>button:hover {
-        border-color: #58a6ff;
-        color: #58a6ff;
-    }
-    
-    /* The Red Stop Button */
-    .stop-btn > div > button {
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
+    [data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 1px solid #30363d; }
+    h1, h2, h3 { color: #58a6ff !important; text-shadow: 0px 0px 10px rgba(88, 166, 255, 0.3); }
+    .stChatMessage { border-radius: 15px; padding: 10px; margin-bottom: 10px; border: 1px solid #30363d; }
+    .stButton>button { width: 100%; border-radius: 8px; background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; transition: 0.3s; }
+    .stButton>button:hover { border-color: #58a6ff; color: #58a6ff; }
+    /* The Red Stop Button Styling */
+    .stop-container > div > button {
         background-color: #da3633 !important;
         color: white !important;
         font-weight: bold;
@@ -92,7 +57,7 @@ if "messages" not in st.session_state: st.session_state.messages = []
 
 # --- 6. SIDEBAR UI ---
 with st.sidebar:
-    st.markdown("## 🧠 SUPERBRAIN CONTROL")
+    st.markdown("## 🧠 AMEK CONTROL")
     
     if st.button("➕ Start New Chat"):
         if st.session_state.messages:
@@ -100,7 +65,11 @@ with st.sidebar:
         st.session_state.messages, st.session_state.current_chat_title = [], f"Chat {len(st.session_state.all_chats) + 1}"
         st.rerun()
 
-   
+    # STOP BUTTON
+    st.markdown('<div class="stop-container">', unsafe_allow_html=True)
+    if st.button("🛑 STOP GENERATION"):
+        st.stop()
+    st.markdown('</div>', unsafe_allow_html=True)
     
     st.divider()
     st.markdown("### 📂 Knowledge Base")
@@ -128,9 +97,8 @@ def call_ai(model_id, prompt_text, context=""):
     except: return "Connection Error"
 
 # --- 8. CHAT INTERFACE ---
-st.title(f"🚀 {st.session_state.current_chat_title}")
+st.title(f"🚀 AMEK: {st.session_state.current_chat_title}")
 
-# Display Messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if "this ai is only for code" in msg["content"] or msg["content"] == "hey":
@@ -140,19 +108,16 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-# User Input
 if prompt := st.chat_input("Input your code query..."):
     if not st.session_state.messages: st.session_state.current_chat_title = prompt[:25]
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Greeting Check
         if prompt.lower().strip() in ["hi", "hello", "hey"]:
             final_answer = "hey"
             st.markdown(final_answer)
         else:
-            # RAG Search
             context = ""
             if st.session_state.vectorstore:
                 docs = st.session_state.vectorstore.similarity_search(prompt, k=3)
@@ -163,11 +128,10 @@ if prompt := st.chat_input("Input your code query..."):
                     futures = [executor.submit(call_ai, id, prompt, context) for id in MODELS.values()]
                     results = [f.result() for f in futures]
                 
-                # Check Rejection
                 if any("this ai is only for code" in r.lower() for r in results):
-                    final_answer = "this ai is only for code"
+                    final_answer = "this ai is only for code except hey"
                 else:
-                    merge_q = f"Merge into 1 perfect code block + logic. If not code, reject:\n{results}"
+                    merge_q = f"Merge into 1 perfect code block + logic breakdown. If not code, reject with 'this ai is only for code except hey':\n{results}"
                     final_answer = call_ai(MODELS["deepseek"], merge_q)
                 status.update(label="✅ Computation Complete", state="complete")
 
