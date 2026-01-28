@@ -100,11 +100,7 @@ with st.sidebar:
         st.session_state.messages, st.session_state.current_chat_title = [], f"Chat {len(st.session_state.all_chats) + 1}"
         st.rerun()
 
-    # STOP BUTTON (Interrupts generation)
-    st.markdown('<div class="stop-btn">', unsafe_allow_html=True)
-    if st.button("🛑 STOP GENERATION"):
-        st.stop()
-    st.markdown('</div>', unsafe_allow_html=True)
+   
     
     st.divider()
     st.markdown("### 📂 Knowledge Base")
