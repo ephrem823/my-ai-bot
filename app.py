@@ -2,6 +2,7 @@ import streamlit as st
 from huggingface_hub import InferenceClient
 import concurrent.futures
 import os
+import datetime
 
 # --- 1. RAG & UTILITY IMPORTS ---
 from sentence_transformers import SentenceTransformer
@@ -27,11 +28,12 @@ st.markdown("""
     .stChatMessage { border-radius: 15px; padding: 10px; margin-bottom: 10px; border: 1px solid #30363d; }
     .stButton>button { width: 100%; border-radius: 8px; background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; transition: 0.3s; }
     .stButton>button:hover { border-color: #58a6ff; color: #58a6ff; }
-    /* The Red Stop Button Styling */
-    .stop-container > div > button {
+    /* Red Stop Button Styling */
+    .stop-btn > div > button {
         background-color: #da3633 !important;
         color: white !important;
         font-weight: bold;
+        text-align: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -49,13 +51,20 @@ class EmbedderWrapper:
 raw_model = load_embed_model()
 embed_model = EmbedderWrapper(raw_model)
 
-# --- 5. STATE MANAGEMENT ---
+# --- 5. LOGGING SYSTEM ---
+def log_usage(user_query, response):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] QUERY: {user_query} | AI: {response[:50]}...\n"
+    with open("usage_logs.txt", "a", encoding="utf-8") as f:
+        f.write(log_entry)
+
+# --- 6. STATE MANAGEMENT ---
 if "vectorstore" not in st.session_state: st.session_state.vectorstore = None
 if "all_chats" not in st.session_state: st.session_state.all_chats = {} 
 if "current_chat_title" not in st.session_state: st.session_state.current_chat_title = "New Chat"
 if "messages" not in st.session_state: st.session_state.messages = []
 
-# --- 6. SIDEBAR UI ---
+# --- 7. SIDEBAR UI ---
 with st.sidebar:
     st.markdown("## 🧠 AMEK CONTROL")
     
@@ -65,24 +74,38 @@ with st.sidebar:
         st.session_state.messages, st.session_state.current_chat_title = [], f"Chat {len(st.session_state.all_chats) + 1}"
         st.rerun()
 
-   
+    # STOP BUTTON
+    st.markdown('<div class="stop-btn">', unsafe_allow_html=True)
+    if st.button("🛑 STOP GENERATION"):
+        st.stop()
+    st.markdown('</div>', unsafe_allow_html=True)
+    
     st.divider()
-    st.markdown("### 📂 Knowledge Base")
-    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
-    if uploaded_file and st.button("🚀 Teach AI"):
+    st.markdown("### 📂 Permanent Knowledge")
+    uploaded_pdf = st.file_uploader("Upload PDF to teach AI", type=["pdf"])
+    if uploaded_pdf and st.button("🚀 Teach AI"):
         with st.spinner("Analyzing PDF..."):
-            with open("temp.pdf", "wb") as f: f.write(uploaded_file.getvalue())
+            with open("temp.pdf", "wb") as f: f.write(uploaded_pdf.getvalue())
             loader = PyPDFLoader("temp.pdf")
-            chunks = RecursiveCharacterTextSplitter(chunk_size=1000000, chunk_overlap=10000).split_documents(loader.load())
+            chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100).split_documents(loader.load())
             st.session_state.vectorstore = FAISS.from_documents(chunks, embed_model)
             st.success("Knowledge Ingested!")
 
-# --- 7. AI CORE LOGIC ---
+    # ADMIN LOGS VISUALIZER
+    st.divider()
+    with st.expander("🔐 Admin Usage Logs"):
+        if os.path.exists("usage_logs.txt"):
+            with open("usage_logs.txt", "r") as f:
+                st.text(f.read())
+        else:
+            st.write("No activity recorded.")
+
+# --- 8. AI CORE LOGIC ---
 client = InferenceClient(api_key=st.secrets["HF_TOKEN"])
 
 def call_ai(model_id, prompt_text, context=""):
     system_instr = """Strict Code Assistant. 
-    If query is NOT code/programming, reply: 'this ai is only for code'. 
+    If query is NOT code/programming, reply: 'this ai is only for code except hey'. 
     No chat, no greetings, just code and logic."""
     full_prompt = f"Context: {context}\n\nQuestion: {prompt_text}" if context else prompt_text
     try:
@@ -91,7 +114,7 @@ def call_ai(model_id, prompt_text, context=""):
         return resp.choices[0].message.content
     except: return "Connection Error"
 
-# --- 8. CHAT INTERFACE ---
+# --- 9. CHAT INTERFACE ---
 st.title(f"🚀 AMEK: {st.session_state.current_chat_title}")
 
 for msg in st.session_state.messages:
@@ -103,36 +126,55 @@ for msg in st.session_state.messages:
         else:
             st.markdown(msg["content"])
 
-if prompt := st.chat_input("Input your code query..."):
-    if not st.session_state.messages: st.session_state.current_chat_title = prompt[:25]
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.chat_message("user").markdown(prompt)
+# --- 10. UNIFIED INPUT (Text + File) ---
+with st.container():
+    # File uploader right above the chat input
+    chat_file = st.file_uploader("📎 Attach code/PDF for this prompt", type=["pdf", "txt", "py"], label_visibility="collapsed")
+    
+    if prompt := st.chat_input("Input your code query..."):
+        
+        # Immediate File Reading
+        file_context = ""
+        if chat_file:
+            if chat_file.type == "application/pdf":
+                with open("chat_temp.pdf", "wb") as f: f.write(chat_file.getvalue())
+                loader = PyPDFLoader("chat_temp.pdf")
+                file_context = "\n".join([d.page_content for d in loader.load()])
+            else:
+                file_context = chat_file.read().decode("utf-8")
 
-    with st.chat_message("assistant"):
-        if prompt.lower().strip() in ["hi", "hello", "hey"]:
-            final_answer = "hey"
-            st.markdown(final_answer)
-        else:
-            context = ""
-            if st.session_state.vectorstore:
-                docs = st.session_state.vectorstore.similarity_search(prompt, k=3)
-                context = "\n".join([d.page_content for d in docs])
+        if not st.session_state.messages: st.session_state.current_chat_title = prompt[:25]
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.chat_message("user").markdown(prompt)
 
-            with st.status("🔮 Consulting AI Ensemble...") as status:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    futures = [executor.submit(call_ai, id, prompt, context) for id in MODELS.values()]
-                    results = [f.result() for f in futures]
-                
-                if any("this ai is only for code" in r.lower() for r in results):
-                    final_answer = "this ai is only for code except hey"
-                else:
-                    merge_q = f"Merge into 1 perfect code block + logic breakdown. If not code, reject with 'this ai is only for code except hey':\n{results}"
-                    final_answer = call_ai(MODELS["deepseek"], merge_q)
-                status.update(label="✅ Computation Complete", state="complete")
-
-            if "this ai is only for code" in final_answer:
+        with st.chat_message("assistant"):
+            if prompt.lower().strip() in ["hi", "hello", "hey"]:
+                final_answer = "hey"
                 st.markdown(final_answer)
             else:
-                st.code(final_answer, language="markdown")
-        
-        st.session_state.messages.append({"role": "assistant", "content": final_answer})
+                # Build Context from File + Vectorstore
+                combined_context = file_context
+                if st.session_state.vectorstore:
+                    docs = st.session_state.vectorstore.similarity_search(prompt, k=3)
+                    combined_context += "\n" + "\n".join([d.page_content for d in docs])
+
+                with st.status("🔮 Consulting AI Ensemble...") as status:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        futures = [executor.submit(call_ai, id, prompt, combined_context) for id in MODELS.values()]
+                        results = [f.result() for f in futures]
+                    
+                    if any("this ai is only for code" in r.lower() for r in results):
+                        final_answer = "this ai is only for code except hey"
+                    else:
+                        merge_q = f"Merge into 1 perfect code block + logic. If not code, say 'this ai is only for code except hey':\n{results}"
+                        final_answer = call_ai(MODELS["deepseek"], merge_q)
+                    status.update(label="✅ Ready", state="complete")
+
+                if "this ai is only for code" in final_answer:
+                    st.markdown(final_answer)
+                else:
+                    st.code(final_answer, language="markdown")
+            
+            # Save to history and Log usage
+            st.session_state.messages.append({"role": "assistant", "content": final_answer})
+            log_usage(prompt, final_answer)
