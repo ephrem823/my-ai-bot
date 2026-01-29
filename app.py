@@ -89,7 +89,7 @@ def call_amek_ai(m_id, prompt, context="", stream=False):
     except: return "Connection Error. Please check HF_TOKEN."
 
 # --- 7. MAIN CHAT DISPLAY ---
-st.title("🚀 AMEK COMMAND CENTER")
+st.title("🚀 AMEK code")
 
 # Show history immediately (The "Not Blacked Out" look)
 for m in st.session_state.messages:
