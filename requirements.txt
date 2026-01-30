@@ -8,7 +8,7 @@ huggingface-hub==0.20.3
 langchain==0.1.16
 langchain-community==0.0.35
 langchain-text-splitters==0.0.2
-# You don't import langchain-huggingface in app.py, so skip it for now
+# (no langchain-huggingface needed unless you import it)
 
 # Vector store + PDF loader
 faiss-cpu==1.13.2
