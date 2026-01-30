@@ -8,14 +8,14 @@ huggingface-hub==0.20.3
 langchain==0.1.16
 langchain-community==0.0.35
 langchain-text-splitters==0.0.2
-# (no langchain-huggingface needed unless you really import it)
+# You don't import langchain-huggingface in app.py, so we skip it for now
 
 # Vector store + PDF loader
 faiss-cpu==1.13.2
 pypdf==4.0.1
 
-# Embeddings
-sentence-transformers==2.3.1
+# Embeddings – updated to avoid old tokenizers build
+sentence-transformers==5.2.2
 
 # Environment and security
 python-dotenv==1.0.1
