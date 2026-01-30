@@ -1,20 +1,19 @@
 # Core UI
 streamlit==1.31.0
 
-# Hugging Face client
-huggingface-hub==0.20.3
+# Hugging Face client (compatible with sentence-transformers 5.2.2 / transformers>=4.41)
+huggingface-hub>=0.24.0,<1.0
 
 # LangChain stack compatible with numpy<2
 langchain==0.1.16
 langchain-community==0.0.35
 langchain-text-splitters==0.0.2
-# (no langchain-huggingface needed unless you import it)
 
 # Vector store + PDF loader
 faiss-cpu==1.13.2
 pypdf==4.0.1
 
-# Embeddings – new enough to avoid old tokenizers build
+# Embeddings
 sentence-transformers==5.2.2
 
 # Environment and security
