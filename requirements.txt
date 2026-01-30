@@ -2,18 +2,20 @@
 streamlit==1.31.0
 
 # Hugging Face client
-huggingface-hub>=0.24.0,<1.0
+huggingface-hub==0.20.3
 
-# Embeddings (if you actually use SentenceTransformer anywhere)
-sentence-transformers==5.2.2
-
-# LangChain components used in app.py
-langchain-community==0.3.31
-langchain-text-splitters==0.3.5
+# LangChain stack compatible with numpy<2
+langchain==0.1.16
+langchain-community==0.0.35
+langchain-text-splitters==0.0.2
+# (no langchain-huggingface needed unless you really import it)
 
 # Vector store + PDF loader
 faiss-cpu==1.13.2
 pypdf==4.0.1
+
+# Embeddings
+sentence-transformers==2.3.1
 
 # Environment and security
 python-dotenv==1.0.1
