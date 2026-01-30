@@ -1,10 +1,10 @@
 streamlit==1.31.0
-huggingface-hub==0.20.3
 
-# Use newer versions that have wheels for Python 3.13
+# Let HF stack versions be compatible with each other and Python 3.13
+huggingface-hub>=0.24.0,<1.0
 sentence-transformers>=3.0.0
-transformers>=4.46.0
-tokenizers>=0.21.0
+transformers>=4.41.0,<5.0.0
+tokenizers>=0.20.0,<0.21.0  # matches transformers in this range
 
 langchain-community==0.0.20
 # faiss-cpu can be added later if needed, with a supported version:
@@ -18,3 +18,4 @@ bleach==6.1.0
 psutil==5.9.8
 fpdf==1.7.2
 pandas==2.2.0
+
