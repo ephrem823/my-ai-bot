@@ -3,6 +3,9 @@
 .env.local
 .env.production
 
+# Streamlit secrets
+.streamlit/secrets.toml
+
 # Database files
 *.db
 *.sqlite

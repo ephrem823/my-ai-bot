@@ -16,8 +16,8 @@ from google.auth.transport import requests
 class Config:
     MODELS = {"primary": "microsoft/DialoGPT-medium"}
     MAX_TOKENS_PER_REQUEST = 1000
-    HF_TOKEN = os.getenv("HF_TOKEN", "")
-    GOOGLE_CLIENT_ID = "358476106608-438sqh426qa11a0d2droihmngmadnql6.apps.googleusercontent.com"
+    HF_TOKEN = st.secrets.get("HF_TOKEN", "")
+    GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
 
 config = Config()
 
