@@ -20,7 +20,6 @@ A sophisticated AI-powered code generation and assistance platform built with St
 
 - Python 3.8+
 - Hugging Face account and API token
-- AWS account (for authentication)
 
 ### Installation
 
@@ -163,45 +162,8 @@ my-ai-bot/
 - `AIClientManager`: AI model management
 - `ConversationExporter`: Export utilities
 
-## 🚀 Deployment
 
-### Streamlit Cloud
-1. Push to GitHub
-2. Connect to Streamlit Cloud
-3. Configure secrets in dashboard
-4. Deploy
 
-### Docker
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-EXPOSE 8501
-CMD ["streamlit", "run", "app.py"]
-```
-
-### Environment Variables for Production
-```bash
-# Required
-HF_TOKEN=your_production_token
-ADMIN_EMAIL=admin@yourcompany.com
-
-# Optional but recommended
-HF_TOKEN_SECONDARY=backup_token
-SECRET_KEY=secure_random_key
-MAX_REQUESTS_PER_MINUTE=50
-MONTHLY_BUDGET_USD=500
-```
-
-## 📝 Usage Examples
-
-### Basic Chat
-1. Log in with AWS credentials
-2. Click "New Chat" to start
-3. Type your coding question
-4. Get AI-generated response with code examples
 
 ### Code Generation
 ```
@@ -213,25 +175,3 @@ AMEK: [Provides complete function with validation logic, error handling, and usa
 1. Select conversation from sidebar
 2. Click export format (Markdown/JSON)
 3. Or click "Share Chat" for public link
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch
-3. Make changes with tests
-4. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🆘 Support
-
-- Check the logs in the admin dashboard
-- Review audit logs for debugging
-- Monitor token usage and costs
-- Contact admin for access issues
-
----
-
-**Built with ❤️ using Streamlit and Hugging Face**
