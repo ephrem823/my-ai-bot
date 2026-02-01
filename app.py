@@ -941,3 +941,475 @@ with st.sidebar:
         
         st.divider()
         st.markdown
+        
+        # Chat History
+        conversations = db.get_user_conversations(st.session_state.user_id)
+        
+        if search_query:
+            conversations = db.search_conversations(st.session_state.user_id, search_query)
+        
+        if conversations:
+            st.markdown("**Recent Chats**")
+            for conv in conversations[:10]:  # Show last 10
+                is_active = conv["conversation_id"] == st.session_state.current_chat_id
+                
+                # Chat item with custom styling
+                chat_class = "chat-item-active" if is_active else "chat-item"
+                
+                if st.button(
+                    f"💬 {conv['title'][:30]}{'...' if len(conv['title']) > 30 else ''}",
+                    key=f"chat_{conv['conversation_id']}",
+                    use_container_width=True,
+                    type="secondary" if is_active else "primary"
+                ):
+                    st.session_state.current_chat_id = conv["conversation_id"]
+                    st.session_state.messages = db.get_conversation_messages(conv["conversation_id"])
+                    audit_logger.log(st.user.email, "load_chat", f"Loaded chat {conv['conversation_id']}")
+                    st.rerun()
+                
+                # Show message count and date
+                st.caption(f"📊 {conv['message_count']} msgs • {conv['updated_at'][:10]}")
+        
+        st.divider()
+        
+        # User Stats
+        stats = db.get_user_stats(st.session_state.user_id)
+        if stats:
+            st.markdown("**📊 Your Stats**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Chats", stats.get("conversation_count", 0))
+                st.metric("Tokens", f"{stats.get('total_tokens', 0):,}")
+            with col2:
+                st.metric("Messages", stats.get("total_messages", 0))
+                st.metric("Cost", f"${stats.get('total_cost', 0):.3f}")
+        
+        st.divider()
+        
+        # Export Options
+        if st.session_state.current_chat_id and st.session_state.messages:
+            st.markdown("**📤 Export Chat**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📄 Markdown", use_container_width=True):
+                    md_content = ConversationExporter.to_markdown(
+                        st.session_state.messages,
+                        f"Chat {st.session_state.current_chat_id}"
+                    )
+                    st.download_button(
+                        "Download MD",
+                        md_content,
+                        f"chat_{st.session_state.current_chat_id}.md",
+                        "text/markdown"
+                    )
+            
+            with col2:
+                if st.button("📋 JSON", use_container_width=True):
+                    json_content = ConversationExporter.to_json(
+                        st.session_state.messages,
+                        f"Chat {st.session_state.current_chat_id}"
+                    )
+                    st.download_button(
+                        "Download JSON",
+                        json_content,
+                        f"chat_{st.session_state.current_chat_id}.json",
+                        "application/json"
+                    )
+            
+            # Share Chat
+            if st.button("🔗 Share Chat", use_container_width=True):
+                share_token = db.create_share_token(st.session_state.current_chat_id)
+                share_url = f"{st.get_option('server.baseUrlPath')}/shared/{share_token}"
+                st.success(f"Share URL: {share_url}")
+                audit_logger.log(st.user.email, "share_chat", f"Shared chat {st.session_state.current_chat_id}")
+        
+        # Admin Panel (if admin)
+        if st.user.email == config.ADMIN_EMAIL:
+            st.divider()
+            st.markdown("**🔧 Admin Panel**")
+            if st.button("📊 Analytics", use_container_width=True):
+                st.session_state.show_admin = True
+                st.rerun()
+    
+    else:
+        # Login prompt
+        st.markdown("### 🔐 Login Required")
+        st.info("Please log in to use AMEK AI")
+        if st.button("🚀 Login with AWS", use_container_width=True, type="primary"):
+            st.login()
+
+# ============================================================================
+# MAIN CHAT INTERFACE
+# ============================================================================
+
+def generate_ai_response(prompt: str, context: str = "", model: str = None) -> Tuple[str, int, float]:
+    """Generate AI response with error handling and metrics"""
+    start_time = time.time()
+    
+    if not model:
+        model = config.MODELS["primary"]
+    
+    # Check cache first
+    cached_response = response_cache.get(prompt, context)
+    if cached_response:
+        processing_time = time.time() - start_time
+        return cached_response, 0, processing_time  # 0 tokens for cached
+    
+    try:
+        client = ai_manager.get_client()
+        
+        # Prepare messages
+        messages = [
+            {"role": "system", "content": """You are AMEK, a professional AI code generator and assistant. 
+            You provide high-quality, secure, and well-documented code solutions.
+            Always explain your code and include best practices.
+            Format code blocks with proper syntax highlighting."""}
+        ]
+        
+        if context:
+            messages.append({"role": "system", "content": f"Context: {context}"})
+        
+        messages.append({"role": "user", "content": prompt})
+        
+        # Generate response
+        response = client.chat_completion(
+            messages=messages,
+            model=model,
+            max_tokens=config.MAX_TOKENS_PER_REQUEST,
+            temperature=0.7,
+            stream=False
+        )
+        
+        content = response.choices[0].message.content
+        tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else len(content.split()) * 1.3
+        
+        processing_time = time.time() - start_time
+        
+        # Cache the response
+        response_cache.set(prompt, content, context)
+        
+        return content, int(tokens_used), processing_time
+        
+    except Exception as e:
+        # Try backup client
+        if not ai_manager.use_backup and ai_manager.backup_client:
+            ai_manager.switch_to_backup()
+            return generate_ai_response(prompt, context, model)
+        
+        processing_time = time.time() - start_time
+        error_msg = f"I apologize, but I'm experiencing technical difficulties. Please try again in a moment.\n\nError: {str(e)}"
+        return error_msg, 0, processing_time
+
+def display_message(message: dict, is_user: bool = False):
+    """Display a chat message with proper formatting"""
+    with st.chat_message("user" if is_user else "assistant"):
+        if is_user:
+            st.markdown(message["content"])
+        else:
+            # Display AI response with code highlighting
+            content = message["content"]
+            
+            # Check if content contains code blocks
+            if "```" in content:
+                parts = content.split("```")
+                for i, part in enumerate(parts):
+                    if i % 2 == 0:  # Regular text
+                        if part.strip():
+                            st.markdown(part)
+                    else:  # Code block
+                        lines = part.split('\n')
+                        language = lines[0] if lines[0] else "text"
+                        code = '\n'.join(lines[1:]) if len(lines) > 1 else part
+                        
+                        if code.strip():
+                            st.code(code, language=language)
+            else:
+                st.markdown(content)
+            
+            # Show metadata
+            if message.get("tokens_used") or message.get("processing_time"):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    if message.get("model_used"):
+                        st.caption(f"🤖 {message['model_used']}")
+                with col2:
+                    if message.get("tokens_used"):
+                        st.caption(f"🎯 {message['tokens_used']} tokens")
+                with col3:
+                    if message.get("processing_time"):
+                        st.caption(f"⚡ {message['processing_time']:.1f}s")
+
+# Main chat interface
+if st.user.is_logged_in:
+    # Check rate limiting
+    allowed, error_msg = rate_limiter.is_allowed(st.user.email)
+    if not allowed:
+        st.error(error_msg)
+        st.stop()
+    
+    # Create new chat if none exists
+    if not st.session_state.current_chat_id:
+        st.session_state.current_chat_id = db.create_conversation(st.session_state.user_id)
+        audit_logger.log(st.user.email, "auto_new_chat", "Auto-created first chat")
+    
+    # Display chat title
+    if st.session_state.current_chat_id:
+        conversations = db.get_user_conversations(st.session_state.user_id)
+        current_conv = next((c for c in conversations if c["conversation_id"] == st.session_state.current_chat_id), None)
+        if current_conv:
+            st.markdown(f"### 💬 {current_conv['title']}")
+    
+    # Display chat messages
+    for message in st.session_state.messages:
+        display_message(message, message["role"] == "user")
+    
+    # Chat input
+    if prompt := st.chat_input("Ask me anything about code, development, or technology..."):
+        # Sanitize input
+        prompt = security.sanitize_input(prompt)
+        
+        if not prompt.strip():
+            st.error("Please enter a valid message.")
+            st.stop()
+        
+        # Add user message
+        user_message = {
+            "role": "user",
+            "content": prompt,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        st.session_state.messages.append(user_message)
+        
+        # Save to database
+        db.add_message(
+            st.session_state.current_chat_id,
+            "user",
+            prompt
+        )
+        
+        # Display user message
+        display_message(user_message, True)
+        
+        # Generate AI response
+        with st.chat_message("assistant"):
+            with st.spinner("🤔 Thinking..."):
+                # Build context from recent messages
+                context = ""
+                if len(st.session_state.messages) > 1:
+                    recent_messages = st.session_state.messages[-5:]  # Last 5 messages
+                    context = "\n".join([f"{m['role']}: {m['content']}" for m in recent_messages[:-1]])
+                
+                response, tokens_used, processing_time = generate_ai_response(prompt, context)
+                
+                # Track metrics
+                metrics.track(st.user.email, "response_time", processing_time)
+                metrics.track(st.user.email, "tokens_used", tokens_used)
+                
+                # Track costs
+                if tokens_used > 0:
+                    db.track_cost(st.session_state.user_id, tokens_used, config.MODELS["primary"])
+                
+                # Create assistant message
+                assistant_message = {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "tokens_used": tokens_used,
+                    "model_used": config.MODELS["primary"],
+                    "processing_time": processing_time
+                }
+                
+                st.session_state.messages.append(assistant_message)
+                
+                # Save to database
+                db.add_message(
+                    st.session_state.current_chat_id,
+                    "assistant",
+                    response,
+                    tokens_used,
+                    config.MODELS["primary"],
+                    processing_time
+                )
+                
+                # Display response
+                display_message(assistant_message)
+                
+                # Auto-generate title for first exchange
+                if len(st.session_state.messages) == 2:
+                    try:
+                        title_prompt = f"Generate a short, descriptive title (max 50 chars) for this conversation: {prompt[:100]}"
+                        title_response, _, _ = generate_ai_response(title_prompt, model=config.MODELS["fast_check"])
+                        title = title_response.strip().strip('"').strip("'")[:50]
+                        db.update_conversation_title(st.session_state.current_chat_id, title)
+                    except:
+                        pass  # Ignore title generation errors
+                
+                audit_logger.log(st.user.email, "chat_message", f"Sent message in chat {st.session_state.current_chat_id}")
+                st.rerun()
+
+else:
+    # Welcome screen for non-logged users
+    st.markdown("""
+    # 🪄 Welcome to AMEK AI
+    
+    ### Professional Code Generator & AI Assistant
+    
+    **Features:**
+    - 🚀 Advanced code generation
+    - 💡 Intelligent problem solving  
+    - 📚 Multi-language support
+    - 🔒 Secure & private conversations
+    - 📊 Usage analytics
+    - 💾 Chat history & export
+    - 🔗 Share conversations
+    
+    **Supported Languages:**
+    Python, JavaScript, TypeScript, Java, C++, Go, Rust, PHP, and more!
+    
+    ---
+    
+    ### 🔐 Get Started
+    Please log in with your AWS account to begin using AMEK AI.
+    """)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🚀 Login with AWS", use_container_width=True, type="primary"):
+            st.login()
+
+# ============================================================================
+# ADMIN DASHBOARD
+# ============================================================================
+
+if st.user.is_logged_in and st.user.email == config.ADMIN_EMAIL and st.session_state.get("show_admin"):
+    st.markdown("---")
+    st.markdown("## 🔧 Admin Dashboard")
+    
+    # Metrics overview
+    dashboard_data = metrics.get_dashboard_data()
+    
+    if dashboard_data:
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">{}</div>
+                <div class="metric-label">Total Requests</div>
+            </div>
+            """.format(dashboard_data.get("total_requests", 0)), unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">{:.1f}s</div>
+                <div class="metric-label">Avg Response Time</div>
+            </div>
+            """.format(dashboard_data.get("avg_response_time", 0)), unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">{:,}</div>
+                <div class="metric-label">Total Tokens</div>
+            </div>
+            """.format(int(dashboard_data.get("total_tokens", 0))), unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-value">{}</div>
+                <div class="metric-label">Active Users</div>
+            </div>
+            """.format(dashboard_data.get("active_users", 0)), unsafe_allow_html=True)
+    
+    # Recent activity
+    st.markdown("### 📋 Recent Activity")
+    activity_df = audit_logger.get_user_activity("", 50)  # Get all users
+    if not activity_df.empty:
+        st.dataframe(activity_df, use_container_width=True)
+    
+    # System controls
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Clear Cache"):
+            response_cache.cache.clear()
+            st.success("Cache cleared!")
+    
+    with col2:
+        if st.button("📊 Export Logs"):
+            # Export audit logs
+            st.download_button(
+                "Download Logs",
+                activity_df.to_csv(index=False),
+                "audit_logs.csv",
+                "text/csv"
+            )
+    
+    if st.button("❌ Close Admin Panel"):
+        st.session_state.show_admin = False
+        st.rerun()
+
+# ============================================================================
+# SHARED CHAT VIEWER
+# ============================================================================
+
+# Handle shared chat URLs
+query_params = st.query_params
+if "shared" in query_params:
+    token = query_params["shared"]
+    shared_conv = db.get_conversation_by_token(token)
+    
+    if shared_conv:
+        st.markdown(f"## 🔗 Shared Chat: {shared_conv['title']}")
+        st.caption(f"Created: {shared_conv['created_at']}")
+        
+        # Load and display messages
+        messages = db.get_conversation_messages(shared_conv["conversation_id"])
+        for message in messages:
+            display_message(message, message["role"] == "user")
+        
+        st.info("This is a read-only shared conversation. Log in to start your own chat!")
+    else:
+        st.error("Invalid or expired share link.")
+
+# ============================================================================
+# FOOTER
+# ============================================================================
+
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #9AA0A6; font-size: 12px; padding: 20px;">
+    🪄 AMEK AI v2.0 | Professional Code Generator<br>
+    Built with ❤️ using Streamlit | Powered by Hugging Face
+</div>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# ERROR HANDLING & CLEANUP
+# ============================================================================
+
+# Global error handler
+def handle_error(error):
+    """Global error handler"""
+    st.error(f"An unexpected error occurred: {str(error)}")
+    if st.user.is_logged_in:
+        audit_logger.log(st.user.email, "error", str(error), success=False)
+        metrics.track(st.user.email, "error", 1)
+
+# Set up error handling
+import sys
+sys.excepthook = lambda exc_type, exc_value, exc_traceback: handle_error(exc_value)
+
+# Cleanup on app shutdown
+import atexit
+def cleanup():
+    """Cleanup resources on shutdown"""
+    try:
+        db.conn.close()
+        audit_logger.conn.close()
+    except:
+        pass
+
+atexit.register(cleanup)
