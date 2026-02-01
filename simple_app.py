@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import streamlit as st
 import os
 import datetime
@@ -22,6 +24,9 @@ import bleach
 from dotenv import load_dotenv
 load_dotenv()
 
+# Load environment variables
+load_dotenv()
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -37,7 +42,7 @@ class Config:
     # Security
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "efaxalemayehu@gmail.com")
     SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
-    HF_TOKEN = os.getenv("HF_TOKEN", "")
+    HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
     HF_TOKEN_SECONDARY = os.getenv("HF_TOKEN_SECONDARY", "")
     SESSION_TIMEOUT = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
     
@@ -276,6 +281,78 @@ def get_ai_manager():
 @st.cache_resource
 def get_database():
     return SimpleDatabase()
+
+ai_manager = get_ai_manager()
+db = get_database()
+
+# ============================================================================
+# MAIN APPLICATION
+# ============================================================================
+
+def main():
+    """Main application"""
+    
+    # Check authentication
+    if not st.session_state.authenticated:
+        login_form()
+        return
+    
+    # Header
+    st.title("🪄 AMEK AI - Professional Code Generator")
+    st.markdown(f"Welcome back, **{st.session_state.user_name}**!")
+    
+    # Sidebar
+    with st.sidebar:
+        st.markdown("### 💬 Chat Controls")
+        
+        if st.button("🆕 New Chat", type="primary"):
+            st.session_state.current_chat_id = str(uuid.uuid4())
+            st.session_state.messages = []
+            st.rerun()
+        
+        if st.button("🚪 Logout"):
+            st.session_state.authenticated = False
+            st.session_state.user_email = ""
+            st.session_state.user_name = ""
+            st.session_state.messages = []
+            st.rerun()
+    
+    # Initialize chat if needed
+    if not st.session_state.current_chat_id:
+        st.session_state.current_chat_id = str(uuid.uuid4())
+    
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask me anything about coding..."):
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Generate and display assistant response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response, tokens, time_taken = generate_ai_response(prompt)
+                st.markdown(response)
+        
+        # Add assistant message
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # Save to database
+        try:
+            db.add_message(st.session_state.current_chat_id, "user", prompt)
+            db.add_message(st.session_state.current_chat_id, "assistant", response)
+        except Exception as e:
+            st.error(f"Failed to save chat: {e}")
+
+if __name__ == "__main__":
+    main()se()
 
 ai_manager = get_ai_manager()
 db = get_database()
