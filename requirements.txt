@@ -1,5 +1,12 @@
 streamlit
 huggingface_hub
+requests
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
+bleach
+python-dotenv
+pandas
+PyJWT
+cryptography
+secrets
