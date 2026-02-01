@@ -16,10 +16,6 @@ import pandas as pd
 
 # Third-party imports
 from huggingface_hub import InferenceClient
-from sentence_transformers import SentenceTransformer
-from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
 import bleach
 
 # Environment variables
