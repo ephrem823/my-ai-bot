@@ -3,25 +3,37 @@
 .env.local
 .env.production
 
-# Python
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
+
+# Virtual environment
 venv/
-.venv/
+env/
+ENV/
 
-# Streamlit
-.streamlit/
-
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
