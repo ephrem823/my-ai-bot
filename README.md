@@ -5,7 +5,7 @@ A sophisticated AI-powered code generation and assistance platform built with St
 ## ✨ Features
 
 - **Advanced Code Generation**: Multi-language support with intelligent code completion
-- **Secure Chat System**: User authentication with AWS integration
+- **Secure Chat System**: User authentication with Google OAuth integration
 - **Persistent Storage**: SQLite database for chat history and user data
 - **Rate Limiting**: Built-in protection against abuse
 - **Cost Tracking**: Monitor token usage and API costs
@@ -20,6 +20,7 @@ A sophisticated AI-powered code generation and assistance platform built with St
 
 - Python 3.8+
 - Hugging Face account and API token
+- Google OAuth credentials
 
 ### Installation
 
@@ -53,6 +54,9 @@ A sophisticated AI-powered code generation and assistance platform built with St
 |----------|-------------|---------|
 | `HF_TOKEN` | Primary Hugging Face API token | Required |
 | `HF_TOKEN_SECONDARY` | Backup API token | Optional |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Required |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Required |
+| `GOOGLE_REDIRECT_URI` | OAuth redirect URI | http://localhost:8501 |
 | `ADMIN_EMAIL` | Admin user email | Required |
 | `SECRET_KEY` | JWT secret key | Auto-generated |
 | `MAX_REQUESTS_PER_MINUTE` | Rate limit per user | 20 |
