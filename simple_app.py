@@ -1,79 +1,112 @@
-import os
-from dotenv import load_dotenv
 import streamlit as st
-import os
-import datetime
-import json
-import uuid
-import hashlib
-import secrets
 import time
-import re
+import datetime
+import uuid
 import sqlite3
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
-from functools import lru_cache
-from collections import defaultdict
-import pandas as pd
-
-# Third-party imports
+import os
 from huggingface_hub import InferenceClient
-import bleach
-
-# Environment variables
-from dotenv import load_dotenv
-load_dotenv()
-
-# Load environment variables
-load_dotenv()
+import streamlit_authenticator as stauth
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
 class Config:
-    """Centralized configuration management"""
-    # AI Models
-    MODELS = {
-        "primary": "deepseek-ai/DeepSeek-V3",
-        "fast_check": "zai-org/GLM-4.7-Flash"
-    }
-    
-    # Security
-    ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "efaxalemayehu@gmail.com")
-    SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
-    HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
-    HF_TOKEN_SECONDARY = os.getenv("HF_TOKEN_SECONDARY", "")
-    SESSION_TIMEOUT = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
-    
-    # Rate Limiting
-    MAX_REQUESTS_PER_MINUTE = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "20"))
-    MAX_TOKENS_PER_REQUEST = int(os.getenv("MAX_TOKENS_PER_REQUEST", "2500"))
-    
-    # Storage
-    DATABASE_PATH = os.getenv("DATABASE_PATH", "chats.db")
-    CHAT_HISTORY_DIR = "chat_histories"
-    
-    # Features
-    ENABLE_ANALYTICS = os.getenv("ENABLE_ANALYTICS", "true").lower() == "true"
-    ENABLE_FILE_UPLOAD = os.getenv("ENABLE_FILE_UPLOAD", "true").lower() == "true"
-    MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
-    
-    # Cost Management
-    MONTHLY_BUDGET = float(os.getenv("MONTHLY_BUDGET_USD", "100.0"))
-    TOKEN_COSTS = {
-        "deepseek-ai/DeepSeek-V3": 0.00002,
-        "zai-org/GLM-4.7-Flash": 0.000001
-    }
+    MODELS = {"primary": "microsoft/DialoGPT-medium"}
+    MAX_TOKENS_PER_REQUEST = 1000
+    HF_TOKEN = os.getenv("HF_TOKEN", "")
+    GOOGLE_CLIENT_ID = "358476106608-438sqh426qa11a0d2droihmngmadnql6.apps.googleusercontent.com"
 
 config = Config()
 
 # ============================================================================
-# SIMPLE AUTHENTICATION
+# DATABASE
+# ============================================================================
+
+class SimpleDatabase:
+    def __init__(self):
+        self.db_path = "chat_history.db"
+        self.init_db()
+    
+    def init_db(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT,
+                role TEXT,
+                content TEXT,
+                timestamp TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+    
+    def add_message(self, chat_id, role, content):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO messages (chat_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (chat_id, role, content, datetime.datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    
+    def get_messages(self, chat_id):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY timestamp",
+            (chat_id,)
+        )
+        messages = [{"role": row[0], "content": row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return messages
+
+# ============================================================================
+# AI CLIENT
+# ============================================================================
+
+class AIClientManager:
+    def __init__(self):
+        self.client = InferenceClient(token=config.HF_TOKEN) if config.HF_TOKEN else None
+    
+    def chat_completion(self, messages, model, max_tokens, temperature, stream):
+        if not self.client:
+            raise Exception("HF_TOKEN not configured")
+        
+        # Simple response generation
+        prompt = messages[-1]["content"]
+        response = self.client.text_generation(
+            prompt=f"User: {prompt}\nAssistant:",
+            model=model,
+            max_new_tokens=max_tokens,
+            temperature=temperature
+        )
+        
+        # Mock response structure
+        class MockResponse:
+            def __init__(self, content):
+                self.choices = [MockChoice(content)]
+        
+        class MockChoice:
+            def __init__(self, content):
+                self.message = MockMessage(content)
+        
+        class MockMessage:
+            def __init__(self, content):
+                self.content = content
+        
+        return MockResponse(response)
+
+# ============================================================================
+# SESSION STATE
 # ============================================================================
 
 def init_session_state():
-    """Initialize session state variables"""
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     if "user_email" not in st.session_state:
@@ -84,19 +117,44 @@ def init_session_state():
         st.session_state.current_chat_id = None
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "user_id" not in st.session_state:
-        st.session_state.user_id = None
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
 
 def login_form():
-    """Simple login form"""
-    st.markdown("### 🔐 Login to AMEK AI")
+    st.markdown("### Login with Google")
+    
+    # Google Sign-In button HTML
+    google_signin_html = f"""
+    <div id="g_id_onload"
+         data-client_id="{config.GOOGLE_CLIENT_ID}"
+         data-callback="handleCredentialResponse">
+    </div>
+    <div class="g_id_signin" data-type="standard"></div>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+    function handleCredentialResponse(response) {{
+        // Send the credential to Streamlit
+        window.parent.postMessage({{
+            type: 'google_auth',
+            credential: response.credential
+        }}, '*');
+    }}
+    </script>
+    """
+    
+    st.components.v1.html(google_signin_html, height=100)
+    
+    st.markdown("---")
+    st.markdown("### Or login manually")
     
     with st.form("login_form"):
-        email = st.text_input("Email", placeholder="your.email@example.com")
-        name = st.text_input("Name", placeholder="Your Name")
-        submitted = st.form_submit_button("Login", type="primary")
+        email = st.text_input("Email")
+        name = st.text_input("Name")
         
-        if submitted:
+        if st.form_submit_button("Login"):
             if email and name:
                 st.session_state.authenticated = True
                 st.session_state.user_email = email
@@ -106,100 +164,17 @@ def login_form():
                 st.error("Please fill in all fields")
 
 # ============================================================================
-# AI CLIENT MANAGER
-# ============================================================================
-
-class AIClientManager:
-    """Manage AI model connections"""
-    
-    def __init__(self):
-        if not config.HF_TOKEN:
-            st.error("⚠️ HF_TOKEN not configured. Please add your Hugging Face token to .env file")
-            st.stop()
-        self.primary_client = InferenceClient(api_key=config.HF_TOKEN)
-        self.backup_client = InferenceClient(api_key=config.HF_TOKEN_SECONDARY) if config.HF_TOKEN_SECONDARY else None
-        self.use_backup = False
-    
-    def get_client(self) -> InferenceClient:
-        """Get active client"""
-        if self.use_backup and self.backup_client:
-            return self.backup_client
-        return self.primary_client
-    
-    def switch_to_backup(self):
-        """Switch to backup token"""
-        if self.backup_client:
-            self.use_backup = True
-
-# ============================================================================
-# SIMPLE DATABASE
-# ============================================================================
-
-class SimpleDatabase:
-    """Simplified database for chat management"""
-    
-    def __init__(self, db_path: str = config.DATABASE_PATH):
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self._create_tables()
-    
-    def _create_tables(self):
-        cursor = self.conn.cursor()
-        
-        # Simple messages table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chat_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        self.conn.commit()
-    
-    def add_message(self, chat_id: str, role: str, content: str):
-        """Add message to database"""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)",
-            (chat_id, role, content)
-        )
-        self.conn.commit()
-    
-    def get_messages(self, chat_id: str) -> List[dict]:
-        """Get messages for a chat"""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT role, content, timestamp FROM messages WHERE chat_id = ? ORDER BY timestamp",
-            (chat_id,)
-        )
-        
-        messages = []
-        for row in cursor.fetchall():
-            messages.append({
-                "role": row[0],
-                "content": row[1],
-                "timestamp": row[2]
-            })
-        return messages
-
-# ============================================================================
 # AI RESPONSE GENERATION
 # ============================================================================
 
-def generate_ai_response(prompt: str, context: str = "") -> Tuple[str, int, float]:
-    """Generate AI response with error handling"""
+def generate_ai_response(prompt, context=""):
     start_time = time.time()
     
     try:
-        client = ai_manager.get_client()
+        client = AIClientManager()
         
-        # Prepare messages
         messages = [
-            {"role": "system", "content": """You are AMEK, a professional AI code generator and assistant. 
-            You provide high-quality, secure, and well-documented code solutions.
+            {"role": "system", "content": """You are AMEK AI, a professional code generator and programming assistant.
             Always explain your code and include best practices.
             Format code blocks with proper syntax highlighting."""}
         ]
@@ -219,7 +194,7 @@ def generate_ai_response(prompt: str, context: str = "") -> Tuple[str, int, floa
         )
         
         content = response.choices[0].message.content
-        tokens_used = len(content.split()) * 1.3  # Rough estimate
+        tokens_used = len(content.split()) * 1.3
         processing_time = time.time() - start_time
         
         return content, int(tokens_used), processing_time
@@ -275,90 +250,13 @@ init_session_state()
 
 # Initialize AI manager and database
 @st.cache_resource
-def get_ai_manager():
-    return AIClientManager()
-
-@st.cache_resource
 def get_database():
     return SimpleDatabase()
 
-ai_manager = get_ai_manager()
 db = get_database()
 
 # ============================================================================
 # MAIN APPLICATION
-# ============================================================================
-
-def main():
-    """Main application"""
-    
-    # Check authentication
-    if not st.session_state.authenticated:
-        login_form()
-        return
-    
-    # Header
-    st.title("🪄 AMEK AI - Professional Code Generator")
-    st.markdown(f"Welcome back, **{st.session_state.user_name}**!")
-    
-    # Sidebar
-    with st.sidebar:
-        st.markdown("### 💬 Chat Controls")
-        
-        if st.button("🆕 New Chat", type="primary"):
-            st.session_state.current_chat_id = str(uuid.uuid4())
-            st.session_state.messages = []
-            st.rerun()
-        
-        if st.button("🚪 Logout"):
-            st.session_state.authenticated = False
-            st.session_state.user_email = ""
-            st.session_state.user_name = ""
-            st.session_state.messages = []
-            st.rerun()
-    
-    # Initialize chat if needed
-    if not st.session_state.current_chat_id:
-        st.session_state.current_chat_id = str(uuid.uuid4())
-    
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    # Chat input
-    if prompt := st.chat_input("Ask me anything about coding..."):
-        # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        # Generate and display assistant response
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response, tokens, time_taken = generate_ai_response(prompt)
-                st.markdown(response)
-        
-        # Add assistant message
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        
-        # Save to database
-        try:
-            db.add_message(st.session_state.current_chat_id, "user", prompt)
-            db.add_message(st.session_state.current_chat_id, "assistant", response)
-        except Exception as e:
-            st.error(f"Failed to save chat: {e}")
-
-if __name__ == "__main__":
-    main()se()
-
-ai_manager = get_ai_manager()
-db = get_database()
-
-# ============================================================================
-# MAIN APP
 # ============================================================================
 
 if not st.session_state.authenticated:
@@ -445,7 +343,7 @@ else:
                 # Build context from recent messages
                 context = ""
                 if len(st.session_state.messages) > 1:
-                    recent_messages = st.session_state.messages[-3:]  # Last 3 messages
+                    recent_messages = st.session_state.messages[-3:]
                     context = "\n".join([f"{m['role']}: {m['content']}" for m in recent_messages[:-1]])
                 
                 response, tokens_used, processing_time = generate_ai_response(prompt, context)
@@ -467,8 +365,6 @@ else:
                 
                 # Show processing info
                 st.caption(f"⚡ {processing_time:.1f}s • 🎯 ~{tokens_used} tokens")
-                
-                st.rerun()
 
 # Footer
 st.markdown("---")
