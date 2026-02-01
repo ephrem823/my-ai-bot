@@ -22,6 +22,9 @@ import bleach
 from dotenv import load_dotenv
 load_dotenv()
 
+# Google Authentication
+from google_auth import init_google_auth, login_button, logout, is_logged_in, get_user
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -887,6 +890,9 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 # ============================================================================
 
+# Initialize Google Auth
+init_google_auth()
+
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 if "messages" not in st.session_state:
@@ -904,23 +910,24 @@ with st.sidebar:
     st.markdown("### 🪄 AMEK AI")
     st.caption("Professional Code Generator v2.0")
     
-    if st.user.is_logged_in:
+    if is_logged_in():
+        user = get_user()
         # Get or create user
         if st.session_state.user_id is None:
-            st.session_state.user_id = db.create_or_get_user(st.user.email, st.user.name)
-            audit_logger.log(st.user.email, "login", "User logged in")
+            st.session_state.user_id = db.create_or_get_user(user['email'], user['name'])
+            audit_logger.log(user['email'], "login", "User logged in")
         
         # User Info
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.write(f"✨ **{st.user.name}**")
+            st.write(f"✨ **{user['name']}**")
         with col2:
             if st.button("🚪", help="Logout"):
-                audit_logger.log(st.user.email, "logout", "User logged out")
+                audit_logger.log(user['email'], "logout", "User logged out")
                 st.session_state.user_id = None
                 st.session_state.current_chat_id = None
                 st.session_state.messages = []
-                st.logout()
+                logout()
         
         st.divider()
         
@@ -1021,7 +1028,7 @@ with st.sidebar:
                 audit_logger.log(st.user.email, "share_chat", f"Shared chat {st.session_state.current_chat_id}")
         
         # Admin Panel (if admin)
-        if st.user.email == config.ADMIN_EMAIL:
+        if user['email'] == config.ADMIN_EMAIL:
             st.divider()
             st.markdown("**🔧 Admin Panel**")
             if st.button("📊 Analytics", use_container_width=True):
@@ -1032,8 +1039,7 @@ with st.sidebar:
         # Login prompt
         st.markdown("### 🔐 Login Required")
         st.info("Please log in to use AMEK AI")
-        if st.button("🚀 Login with AWS", use_container_width=True, type="primary"):
-            st.login()
+        login_button()
 
 # ============================================================================
 # MAIN CHAT INTERFACE
@@ -1137,9 +1143,10 @@ def display_message(message: dict, is_user: bool = False):
                         st.caption(f"⚡ {message['processing_time']:.1f}s")
 
 # Main chat interface
-if st.user.is_logged_in:
+if is_logged_in():
+    user = get_user()
     # Check rate limiting
-    allowed, error_msg = rate_limiter.is_allowed(st.user.email)
+    allowed, error_msg = rate_limiter.is_allowed(user['email'])
     if not allowed:
         st.error(error_msg)
         st.stop()
@@ -1199,8 +1206,8 @@ if st.user.is_logged_in:
                 response, tokens_used, processing_time = generate_ai_response(prompt, context)
                 
                 # Track metrics
-                metrics.track(st.user.email, "response_time", processing_time)
-                metrics.track(st.user.email, "tokens_used", tokens_used)
+                metrics.track(user['email'], "response_time", processing_time)
+                metrics.track(user['email'], "tokens_used", tokens_used)
                 
                 # Track costs
                 if tokens_used > 0:
@@ -1241,7 +1248,7 @@ if st.user.is_logged_in:
                     except:
                         pass  # Ignore title generation errors
                 
-                audit_logger.log(st.user.email, "chat_message", f"Sent message in chat {st.session_state.current_chat_id}")
+                audit_logger.log(user['email'], "chat_message", f"Sent message in chat {st.session_state.current_chat_id}")
                 st.rerun()
 
 else:
@@ -1271,14 +1278,13 @@ else:
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🚀 Login with AWS", use_container_width=True, type="primary"):
-            st.login()
+        login_button()
 
 # ============================================================================
 # ADMIN DASHBOARD
 # ============================================================================
 
-if st.user.is_logged_in and st.user.email == config.ADMIN_EMAIL and st.session_state.get("show_admin"):
+if is_logged_in() and get_user()['email'] == config.ADMIN_EMAIL and st.session_state.get("show_admin"):
     st.markdown("---")
     st.markdown("## 🔧 Admin Dashboard")
     
@@ -1390,9 +1396,10 @@ st.markdown("""
 def handle_error(error):
     """Global error handler"""
     st.error(f"An unexpected error occurred: {str(error)}")
-    if st.user.is_logged_in:
-        audit_logger.log(st.user.email, "error", str(error), success=False)
-        metrics.track(st.user.email, "error", 1)
+    if is_logged_in():
+        user = get_user()
+        audit_logger.log(user['email'], "error", str(error), success=False)
+        metrics.track(user['email'], "error", 1)
 
 # Set up error handling
 import sys
