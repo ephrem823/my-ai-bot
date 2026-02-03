@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+HF_TOKEN = st.secrets.get("HF_TOKEN", os.getenv("HUGGINGFACE_API_TOKEN", ""))
 if not HF_TOKEN:
-    st.error("⚠️ HUGGINGFACE_API_TOKEN not found in .env file")
+    st.error("⚠️ HF_TOKEN not found in Streamlit secrets")
     st.stop()
 
 # Initialize client
