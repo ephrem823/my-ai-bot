@@ -15,7 +15,7 @@ if not HF_TOKEN:
     st.stop()
 
 # Initialize client
-client = InferenceClient(token=HF_TOKEN)
+client = InferenceClient(api_key=HF_TOKEN)
 
 # Page config
 st.set_page_config(
