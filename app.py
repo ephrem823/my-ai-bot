@@ -14,6 +14,11 @@ if not HF_TOKEN:
     st.error("⚠️ HF_TOKEN not found in Streamlit secrets")
     st.stop()
 
+# Validate token format
+if not HF_TOKEN.startswith("hf_"):
+    st.error("⚠️ Invalid HF_TOKEN format. Token must start with 'hf_'")
+    st.stop()
+
 # Initialize client
 client = InferenceClient(api_key=HF_TOKEN)
 
