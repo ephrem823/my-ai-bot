@@ -1,12 +1,5 @@
-streamlit
-huggingface_hub
-requests
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-bleach
-python-dotenv
-pandas
-PyJWT
-cryptography
-secrets
+streamlit>=1.28.0
+huggingface_hub>=0.19.0
+python-dotenv>=1.0.0
+bleach>=6.0.0
+sqlite3

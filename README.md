@@ -1,181 +1,125 @@
 # 🪄 AMEK AI - Professional Code Generator
 
-A sophisticated AI-powered code generation and assistance platform built with Streamlit and Hugging Face models.
+A powerful AI-powered code generation and assistance tool built with Streamlit and Hugging Face models.
 
 ## ✨ Features
 
-- **Advanced Code Generation**: Multi-language support with intelligent code completion
-- **Secure Chat System**: User authentication with Google OAuth integration
-- **Persistent Storage**: SQLite database for chat history and user data
-- **Rate Limiting**: Built-in protection against abuse
-- **Cost Tracking**: Monitor token usage and API costs
-- **Export Options**: Download chats in Markdown, JSON, or plain text
-- **Share Conversations**: Generate secure links to share chats
-- **Admin Dashboard**: Analytics and system monitoring
-- **Responsive Design**: Professional dark theme with mobile support
+- **Professional AI Code Generation** using DeepSeek-V3 and GLM-4.7-Flash models
+- **Secure Input Sanitization** with XSS and SQL injection protection
+- **Dual Token Support** with automatic fallback
+- **Real-time Chat Interface** with syntax highlighting
+- **Cost Tracking** and usage analytics
+- **Professional Dark Theme** UI
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.8+
-- Hugging Face account and API token
-- Google OAuth credentials
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd my-ai-bot
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-4. **Run the application**
-   ```bash
-   streamlit run app.py
-   ```
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `HF_TOKEN` | Primary Hugging Face API token | Required |
-| `HF_TOKEN_SECONDARY` | Backup API token | Optional |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Required |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Required |
-| `GOOGLE_REDIRECT_URI` | OAuth redirect URI | http://localhost:8501 |
-| `ADMIN_EMAIL` | Admin user email | Required |
-| `SECRET_KEY` | JWT secret key | Auto-generated |
-| `MAX_REQUESTS_PER_MINUTE` | Rate limit per user | 20 |
-| `MAX_TOKENS_PER_REQUEST` | Token limit per request | 2500 |
-| `DATABASE_PATH` | SQLite database file | chats.db |
-| `MONTHLY_BUDGET_USD` | Cost tracking budget | 100.0 |
-
-### Supported Models
-
-- **Primary**: `deepseek-ai/DeepSeek-V3` - Main code generation model
-- **Fast Check**: `zai-org/GLM-4.7-Flash` - Quick responses and title generation
-
-## 🏗️ Architecture
-
-### Core Components
-
-1. **Configuration Management** (`Config` class)
-   - Centralized settings
-   - Environment variable handling
-   - Model configuration
-
-2. **Security Layer**
-   - Input sanitization
-   - JWT token management
-   - Rate limiting
-   - Audit logging
-
-3. **Database Layer** (`ChatDatabase` class)
-   - User management
-   - Conversation storage
-   - Message tracking
-   - Cost monitoring
-
-4. **AI Integration** (`AIClientManager` class)
-   - Hugging Face API management
-   - Fallback handling
-   - Response caching
-
-5. **Analytics** (`MetricsCollector` class)
-   - Performance monitoring
-   - Usage statistics
-   - Error tracking
-
-### Database Schema
-
-```sql
--- Users table
-users (user_id, email, name, created_at, last_active, total_tokens_used, total_cost)
-
--- Conversations table  
-conversations (conversation_id, user_id, title, created_at, updated_at, is_active, is_shared, share_token, message_count)
-
--- Messages table
-messages (message_id, conversation_id, role, content, timestamp, tokens_used, model_used, processing_time)
-
--- Cost tracking table
-cost_tracking (id, user_id, date, tokens_used, cost, model_used)
-
--- Audit logs table
-audit_logs (id, timestamp, user_email, action, details, ip_address, success)
+### 1. Clone and Setup
+```bash
+cd "AI Bot/my-ai-bot"
+python setup.py
 ```
+
+### 2. Configure Environment
+Edit `.env` file and add your Hugging Face API token:
+```env
+HF_TOKEN=hf_your_actual_token_here
+HF_TOKEN_SECONDARY=hf_your_backup_token_here  # Optional
+```
+
+### 3. Run the Application
+```bash
+# Simple version
+streamlit run app.py
+
+# Full-featured version
+streamlit run app_minimal.py
+```
+
+## 🔧 Configuration
+
+### Required Environment Variables
+- `HF_TOKEN`: Your primary Hugging Face API token
+- `HF_TOKEN_SECONDARY`: Backup token (optional)
+
+### Optional Configuration
+- `MAX_REQUESTS_PER_MINUTE`: Rate limiting (default: 20)
+- `MAX_TOKENS_PER_REQUEST`: Token limit per request (default: 2500)
+- `MONTHLY_BUDGET_USD`: Cost tracking budget (default: 100.0)
+
+## 📁 Project Structure
+
+```
+my-ai-bot/
+├── app.py              # Simple version
+├── app_minimal.py      # Full-featured version
+├── setup.py           # Setup script
+├── requirements.txt   # Dependencies
+├── .env              # Environment variables
+├── .env.example      # Environment template
+└── README.md         # This file
+```
+
+## 🛠️ Dependencies
+
+- `streamlit>=1.28.0` - Web interface
+- `huggingface_hub>=0.19.0` - AI model access
+- `python-dotenv>=1.0.0` - Environment management
+- `bleach>=6.0.0` - Input sanitization
 
 ## 🔒 Security Features
 
-- **Input Sanitization**: XSS and SQL injection prevention
-- **Rate Limiting**: Per-user request throttling
-- **Audit Logging**: Comprehensive activity tracking
-- **Secure Tokens**: JWT-based sharing with expiration
-- **Data Validation**: Input validation and error handling
+- Input sanitization against XSS attacks
+- SQL injection prevention
+- Rate limiting
+- Secure token management
 
-## 📊 Analytics & Monitoring
+## 💡 Usage Tips
 
-### User Dashboard
-- Token usage statistics
-- Cost tracking
-- Conversation metrics
-- Activity history
+1. **Model Selection**: Choose between DeepSeek-V3 (powerful) or GLM-4.7-Flash (fast)
+2. **Quick Actions**: Use sidebar buttons for common coding tasks
+3. **Code Highlighting**: Responses automatically format code blocks
+4. **New Chat**: Clear conversation history anytime
 
-### Admin Dashboard
-- System-wide analytics
-- User activity monitoring
-- Performance metrics
-- Error tracking
+## 🐛 Troubleshooting
 
-## 🔧 Development
+### Common Issues
 
-### Project Structure
-```
-my-ai-bot/
-├── app.py              # Main application
-├── requirements.txt    # Dependencies
-├── .env.example       # Environment template
-├── README.md          # Documentation
-├── chats.db           # SQLite database (auto-created)
-└── chat_histories/    # Export directory (auto-created)
-```
+**"HF_TOKEN not found"**
+- Make sure `.env` file exists and contains your actual Hugging Face token
 
-### Key Classes
+**"API connection failed"**
+- Verify your Hugging Face token is valid
+- Check your internet connection
+- Try using the backup token
 
-- `Config`: Configuration management
-- `SecurityManager`: Security operations
-- `RateLimiter`: Request throttling
-- `AuditLogger`: Activity logging
-- `ChatDatabase`: Data persistence
-- `MetricsCollector`: Analytics
-- `ResponseCache`: Response caching
-- `AIClientManager`: AI model management
-- `ConversationExporter`: Export utilities
+**"Dependencies not found"**
+- Run `python setup.py` to install all requirements
 
+## 📊 Cost Management
 
+The app tracks token usage and estimated costs:
+- DeepSeek-V3: ~$0.00002 per token
+- GLM-4.7-Flash: ~$0.000001 per token
 
+## 🤝 Contributing
 
-### Code Generation
-```
-User: "Create a Python function to validate email addresses"
-AMEK: [Provides complete function with validation logic, error handling, and usage examples]
-```
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-### Export & Share
-1. Select conversation from sidebar
-2. Click export format (Markdown/JSON)
-3. Or click "Share Chat" for public link
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For issues or questions:
+1. Check the troubleshooting section
+2. Review the setup script output
+3. Ensure all environment variables are configured
+
+---
+
+**Made with ❤️ by AMEK**
