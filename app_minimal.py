@@ -4,9 +4,13 @@ import requests
 from typing import Dict, List, Optional
 
 # Import local modules
-import config
-from security import Security
-from ai_service import generate_ai_response
+try:
+    import config
+    from security import Security
+    from ai_service import generate_ai_response
+except ImportError as e:
+    st.error(f"Missing module: {e}")
+    st.stop()
 
 # ============================================================================
 # CONFIGURATION
@@ -91,10 +95,15 @@ def show_login_page():
 def main():
     """Main application function"""
     
-    # Check for required environment variables using Streamlit secrets
-    hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
+    # Check for required environment variables
+    try:
+        hf_token = st.secrets.get("HF_TOKEN") or getattr(config, 'HF_TOKEN', None)
+    except:
+        hf_token = None
+        
     if not hf_token:
-        st.error("⚠️ HF_TOKEN not found in Streamlit secrets or .env file.")
+        st.error("⚠️ HF_TOKEN not found in Streamlit secrets or config.")
+        st.info("Please add HF_TOKEN to your Streamlit secrets or config.py file.")
         st.stop()
     
     # Check authentication
@@ -127,9 +136,14 @@ def main():
         st.divider()
         
         # Model selection
+        try:
+            model_options = list(config.MODELS.values()) if hasattr(config, 'MODELS') else ["gpt-3.5-turbo"]
+        except:
+            model_options = ["gpt-3.5-turbo"]
+            
         selected_model = st.selectbox(
             "🤖 AI Model",
-            options=list(config.MODELS.values()),
+            options=model_options,
             index=0
         )
         
@@ -156,7 +170,11 @@ def main():
     # Chat input
     if prompt := st.chat_input("Ask me anything about coding..."):
         # Sanitize input
-        prompt = security.sanitize_input(prompt)
+        try:
+            prompt = security.sanitize_input(prompt)
+        except:
+            # Basic sanitization if security module fails
+            prompt = prompt.strip()
         
         # Add user message
         user_message = {"role": "user", "content": prompt}
@@ -166,10 +184,15 @@ def main():
         # Generate AI response
         with st.chat_message("assistant"):
             with st.spinner("🤔 Thinking..."):
-                response_content, tokens_used, processing_time = generate_ai_response(
-                    prompt, 
-                    model=selected_model
-                )
+                try:
+                    response_content, tokens_used, processing_time = generate_ai_response(
+                        prompt, 
+                        model=selected_model
+                    )
+                except Exception as e:
+                    response_content = f"Sorry, I encountered an error: {str(e)}"
+                    tokens_used = 0
+                    processing_time = 0
                 
                 # Create assistant message with metadata
                 assistant_message = {
@@ -177,7 +200,7 @@ def main():
                     "content": response_content,
                     "tokens_used": tokens_used,
                     "processing_time": processing_time,
-                    "model_used": selected_model.split("/")[-1]
+                    "model_used": selected_model.split("/")[-1] if "/" in selected_model else selected_model
                 }
                 
                 st.session_state.messages.append(assistant_message)
