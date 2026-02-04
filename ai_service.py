@@ -14,7 +14,7 @@ def generate_ai_response(prompt, model=None):
     
     # Use default model if none specified
     if not model:
-        model = "microsoft/DialoGPT-medium"  # Use a reliable model
+        model = "microsoft/DialoGPT-medium"  # Use a reliable text generation model
     
     # Start timing
     start_time = time.time()

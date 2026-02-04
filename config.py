@@ -12,9 +12,9 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8501')
 
-# Available Models
+# Available Models - Text Generation Models Only
 MODELS = {
-    'codellama': 'codellama/CodeLlama-7b-Instruct-hf',
-    'starcoder': 'bigcode/starcoder',
-    'codebert': 'microsoft/codebert-base'
+    'dialogpt': 'microsoft/DialoGPT-medium',
+    'gpt2': 'gpt2',
+    'distilgpt2': 'distilgpt2'
 }
