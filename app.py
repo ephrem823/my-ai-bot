@@ -61,6 +61,8 @@ def display_message(message, is_user=False):
 
 def show_login_page():
     """Display login page with optional OAuth or guest access"""
+    global oauth_available
+    
     st.markdown("""
     <div style="text-align: center; padding: 50px;">
         <h1>🪄 AMEK AI</h1>
