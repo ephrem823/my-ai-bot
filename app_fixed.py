@@ -52,13 +52,13 @@ def display_message(message, is_user=False):
             col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
                 if message.get("model_used"):
-                    st.caption(f"Model: {message['model_used']}")
+                    st.caption("Model: " + message['model_used'])
             with col2:
                 if message.get("tokens_used"):
-                    st.caption(f"Tokens: {message['tokens_used']}")
+                    st.caption("Tokens: " + str(message['tokens_used']))
             with col3:
                 if message.get("processing_time"):
-                    st.caption(f"Time: {message['processing_time']:.1f}s")
+                    st.caption("Time: {:.1f}s".format(message['processing_time']))
 
 def show_login_page():
     """Display login page with optional OAuth or guest access"""
@@ -77,9 +77,9 @@ def show_login_page():
         if oauth_available:
             try:
                 auth_url = google_oauth.get_auth_url()
-                st.markdown(f"""
+                st.markdown("""
                 <div style="text-align: center; margin-bottom: 20px;">
-                    <a href="{auth_url}" target="_self">
+                    <a href="{}" target="_self">
                         <button style="
                             background-color: #4285f4;
                             color: white;
@@ -94,7 +94,7 @@ def show_login_page():
                         </button>
                     </a>
                 </div>
-                """, unsafe_allow_html=True)
+                """.format(auth_url), unsafe_allow_html=True)
             except Exception:
                 pass
         
@@ -113,7 +113,7 @@ def main():
     # Check for HF token
     hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
     if not hf_token or hf_token == "your_huggingface_token_here":
-        st.error("⚠️ Please configure HF_TOKEN in Streamlit secrets or .env file")
+        st.error("Please configure HF_TOKEN in Streamlit secrets or .env file")
         st.info("Get your token from: https://huggingface.co/settings/tokens")
         st.stop()
     
@@ -130,7 +130,7 @@ def main():
                     st.query_params.clear()
                     st.rerun()
             except Exception as e:
-                st.error(f"Authentication error: {str(e)}")
+                st.error("Authentication error: " + str(e))
     
     # Check authentication
     if not st.session_state.authenticated:
@@ -146,7 +146,7 @@ def main():
         st.title("AMEK AI - Professional Code Generator")
         st.markdown("*Your intelligent coding companion*")
     with col2:
-        st.markdown(f"**Welcome, {user_info.get('name', 'User')}!**")
+        st.markdown("**Welcome, {}!**".format(user_info.get('name', 'User')))
         if st.button("Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.user_info = None
@@ -189,7 +189,8 @@ def main():
         display_message(message, is_user=(message["role"] == "user"))
     
     # Chat input
-    if prompt := st.chat_input("Ask me anything about coding..."):
+    prompt = st.chat_input("Ask me anything about coding...")
+    if prompt:
         # Add user message
         user_message = {"role": "user", "content": prompt}
         st.session_state.messages.append(user_message)

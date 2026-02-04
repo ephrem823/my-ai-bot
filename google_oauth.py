@@ -1,61 +1,37 @@
-import streamlit as st
 import os
 import requests
-import urllib.parse
-from typing import Dict, Optional
+from urllib.parse import urlencode
+import streamlit as st
 
 class GoogleOAuth:
     def __init__(self):
-        # Try Streamlit secrets first, then environment variables
-        self.client_id = st.secrets.get('GOOGLE_CLIENT_ID') or os.getenv('GOOGLE_CLIENT_ID')
-        self.client_secret = st.secrets.get('GOOGLE_CLIENT_SECRET') or os.getenv('GOOGLE_CLIENT_SECRET')
-        self.redirect_uri = st.secrets.get('GOOGLE_REDIRECT_URI') or os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8501')
-        
-        # Don't raise error here - let individual methods handle missing credentials
-        self.is_configured = bool(self.client_id and self.client_secret and 
-                                self.client_id != 'your_google_client_id' and 
-                                self.client_secret != 'your_google_client_secret')
+        self.client_id = os.getenv("GOOGLE_CLIENT_ID")
+        self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET") 
+        self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8501")
+        self.is_configured = bool(self.client_id and self.client_secret)
     
-    def get_auth_url(self) -> str:
-        """Generate Google OAuth authorization URL"""
-        # Check if credentials are properly configured
-        if not self.is_configured:
-            raise ValueError("Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Streamlit secrets or .env file")
-            
+    def get_auth_url(self):
         params = {
-            'client_id': self.client_id,
-            'redirect_uri': self.redirect_uri,
-            'scope': 'openid email profile',
-            'response_type': 'code',
-            'access_type': 'offline',
-            'prompt': 'consent'
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": "openid email profile",
+            "response_type": "code",
+            "access_type": "offline"
         }
-        return f"https://accounts.google.com/o/oauth2/auth?{urllib.parse.urlencode(params)}"
+        return f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
     
-    def exchange_code_for_token(self, code: str) -> Dict:
-        """Exchange authorization code for access token"""
+    def exchange_code_for_token(self, code):
         data = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'code': code,
-            'grant_type': 'authorization_code',
-            'redirect_uri': self.redirect_uri
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": self.redirect_uri
         }
-        
-        response = requests.post('https://oauth2.googleapis.com/token', data=data)
-        response.raise_for_status()
+        response = requests.post("https://oauth2.googleapis.com/token", data=data)
         return response.json()
     
-    def get_user_info(self, access_token: str) -> Dict:
-        """Get user information using access token"""
-        headers = {'Authorization': f'Bearer {access_token}'}
-        response = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers=headers)
-        response.raise_for_status()
+    def get_user_info(self, access_token):
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers=headers)
         return response.json()
-    
-    def verify_token(self, access_token: str) -> Optional[Dict]:
-        """Verify access token and return user info"""
-        try:
-            return self.get_user_info(access_token)
-        except:
-            return None
