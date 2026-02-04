@@ -11,14 +11,16 @@ class GoogleOAuth:
         self.client_secret = st.secrets.get('GOOGLE_CLIENT_SECRET') or os.getenv('GOOGLE_CLIENT_SECRET')
         self.redirect_uri = st.secrets.get('GOOGLE_REDIRECT_URI') or os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8501')
         
-        if not all([self.client_id, self.client_secret]):
-            raise ValueError("Missing Google OAuth credentials in Streamlit secrets or environment variables")
+        # Don't raise error here - let individual methods handle missing credentials
+        self.is_configured = bool(self.client_id and self.client_secret and 
+                                self.client_id != 'your_google_client_id' and 
+                                self.client_secret != 'your_google_client_secret')
     
     def get_auth_url(self) -> str:
         """Generate Google OAuth authorization URL"""
         # Check if credentials are properly configured
-        if self.client_id == 'your_google_client_id' or not self.client_id:
-            raise ValueError("Google OAuth not configured. Please set GOOGLE_CLIENT_ID in Streamlit secrets or .env file")
+        if not self.is_configured:
+            raise ValueError("Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Streamlit secrets or .env file")
             
         params = {
             'client_id': self.client_id,

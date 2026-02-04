@@ -1,217 +1,144 @@
 import streamlit as st
-import time
-import requests
-from typing import Dict, List, Optional
-
-# Import local modules
+import os
+from dotenv import load_dotenv
 import config
-from security import Security
-from google_oauth import GoogleOAuth
+import security
+from ai_service import generate_ai_response
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-# Initialize components
-security = Security()
-google_oauth = GoogleOAuth()
+# Load environment variables
+load_dotenv()
 
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-# ============================================================================
-# AI RESPONSE FUNCTIONS
-# ============================================================================
+# Try to initialize OAuth, but don't fail if not configured
+try:
+    from google_oauth import GoogleOAuth
+    google_oauth = GoogleOAuth()
+    oauth_available = google_oauth.is_configured
+except Exception:
+    oauth_available = False
 
-def generate_ai_response(prompt: str, model: str = "codellama/CodeLlama-7b-Instruct-hf") -> tuple[str, int, float]:
-    """Generate AI response using Hugging Face API"""
-    start_time = time.time()
+def display_message(message, is_user=False):
+    """Display a chat message"""
+    role = "user" if is_user else "assistant"
     
-    try:
-        # Prepare the API request
-        headers = {
-            "Authorization": f"Bearer {config.HF_TOKEN}",
-            "Content-Type": "application/json"
-        }
+    with st.chat_message(role):
+        content = message["content"]
         
-        # Create a focused prompt for code generation
-        system_prompt = "You are a professional code assistant. Provide clear, efficient, and well-documented code solutions."
-        full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
-        
-        payload = {
-            "inputs": full_prompt,
-            "parameters": {
-                "max_new_tokens": 500,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "do_sample": True,
-                "return_full_text": False
-            }
-        }
-        
-        # Make API request
-        api_url = f"https://api-inference.huggingface.co/models/{model}"
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                response_content = result[0].get("generated_text", "")
-            else:
-                response_content = "I apologize, but I couldn't generate a response. Please try again."
+        if not is_user and "```" in content:
+            # Handle code blocks
+            parts = content.split("```")
+            for i, part in enumerate(parts):
+                if i % 2 == 0:  # Regular text
+                    if part.strip():
+                        st.markdown(part)
+                else:  # Code block
+                    lines = part.split('\n')
+                    language = lines[0] if lines[0] else "text"
+                    code = '\n'.join(lines[1:]) if len(lines) > 1 else part
+                    
+                    if code.strip():
+                        st.code(code, language=language)
         else:
-            response_content = f"I'm currently experiencing high demand. Please try again in a moment. (Status: {response.status_code})"
+            st.markdown(content)
         
-        processing_time = time.time() - start_time
-        return response_content, 50, processing_time
-        
-    except Exception as e:
-        processing_time = time.time() - start_time
-        error_msg = f"I apologize, but I'm experiencing technical difficulties. Please try again in a moment.\n\nError: {str(e)}"
-        return error_msg, 0, processing_time
-
-def display_message(message: dict, is_user: bool = False):
-    """Display a chat message with proper formatting"""
-    with st.chat_message("user" if is_user else "assistant"):
-        if is_user:
-            st.markdown(message["content"])
-        else:
-            # Display AI response with code highlighting
-            content = message["content"]
-            
-            # Check if content contains code blocks
-            if "```" in content:
-                parts = content.split("```")
-                for i, part in enumerate(parts):
-                    if i % 2 == 0:  # Regular text
-                        if part.strip():
-                            st.markdown(part)
-                    else:  # Code block
-                        lines = part.split('\n')
-                        language = lines[0] if lines[0] else "text"
-                        code = '\n'.join(lines[1:]) if len(lines) > 1 else part
-                        
-                        if code.strip():
-                            st.code(code, language=language)
-            else:
-                st.markdown(content)
-            
-            # Show metadata
-            if message.get("tokens_used") or message.get("processing_time"):
-                col1, col2, col3 = st.columns([2, 1, 1])
-                with col1:
-                    if message.get("model_used"):
-                        st.caption(f"🤖 {message['model_used']}")
-                with col2:
-                    if message.get("tokens_used"):
-                        st.caption(f"📊 {message['tokens_used']} tokens")
-                with col3:
-                    if message.get("processing_time"):
-                        st.caption(f"⏱️ {message['processing_time']:.1f}s")
-
-# ============================================================================
-# AUTHENTICATION FUNCTIONS
-# ============================================================================
-
-def handle_oauth_callback():
-    """Handle OAuth callback from Google"""
-    query_params = st.query_params
-    
-    if "code" in query_params:
-        try:
-            # Exchange code for token
-            token_data = google_oauth.exchange_code_for_token(query_params["code"])
-            
-            if "access_token" in token_data:
-                # Get user info
-                user_info = google_oauth.get_user_info(token_data["access_token"])
-                
-                # Store in session
-                st.session_state.authenticated = True
-                st.session_state.user_info = user_info
-                st.session_state.access_token = token_data["access_token"]
-                
-                # Clear URL parameters
-                st.query_params.clear()
-                st.rerun()
-            else:
-                st.error("Authentication failed. Please try again.")
-        except Exception as e:
-            st.error(f"Authentication error: {str(e)}")
-    
-    elif "error" in query_params:
-        st.error(f"Authentication cancelled: {query_params.get('error', 'Unknown error')}")
+        # Show metadata for assistant messages
+        if not is_user and message.get("tokens_used"):
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                if message.get("model_used"):
+                    st.caption(f"🤖 {message['model_used']}")
+            with col2:
+                if message.get("tokens_used"):
+                    st.caption(f"📊 {message['tokens_used']} tokens")
+            with col3:
+                if message.get("processing_time"):
+                    st.caption(f"⏱️ {message['processing_time']:.1f}s")
 
 def show_login_page():
-    """Display login page with Google OAuth"""
+    """Display login page with optional OAuth or guest access"""
     st.markdown("""
     <div style="text-align: center; padding: 50px;">
         <h1>🪄 AMEK AI</h1>
         <h3>Professional Code Generator</h3>
-        <p style="color: #888; margin-bottom: 40px;">Please sign in with your Google account to continue</p>
+        <p style="color: #888; margin-bottom: 40px;">Your intelligent coding companion</p>
     </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        auth_url = google_oauth.get_auth_url()
+        if oauth_available:
+            try:
+                auth_url = google_oauth.get_auth_url()
+                st.markdown(f"""
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <a href="{auth_url}" target="_self">
+                        <button style="
+                            background-color: #4285f4;
+                            color: white;
+                            border: none;
+                            padding: 12px 24px;
+                            border-radius: 8px;
+                            font-size: 16px;
+                            cursor: pointer;
+                            width: 100%;
+                        ">
+                            🔐 Sign in with Google
+                        </button>
+                    </a>
+                </div>
+                """, unsafe_allow_html=True)
+            except Exception:
+                oauth_available = False
         
-        st.markdown(f"""
-        <div style="text-align: center;">
-            <a href="{auth_url}" target="_self">
-                <button style="
-                    background-color: #4285f4;
-                    color: white;
-                    border: none;
-                    padding: 12px 24px;
-                    border-radius: 8px;
-                    font-size: 16px;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 10px;
-                    text-decoration: none;
-                ">
-                    <svg width="20" height="20" viewBox="0 0 24 24">
-                        <path fill="white" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="white" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="white" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="white" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    Sign in with Google
-                </button>
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
+        # Always show guest option
+        if st.button("🚀 Continue as Guest", use_container_width=True):
+            st.session_state.authenticated = True
+            st.session_state.user_info = {"name": "Guest User", "email": "guest@example.com"}
+            st.rerun()
         
-        st.markdown("<br><p style='text-align: center; color: #666; font-size: 14px;'>Secure authentication powered by Google OAuth 2.0</p>", unsafe_allow_html=True)
-
-# ============================================================================
-# MAIN APPLICATION
-# ============================================================================
+        if not oauth_available:
+            st.info("💡 OAuth not configured. Using guest mode.")
 
 def main():
     """Main application function"""
     
-    # Check for required environment variables
-    if not config.HF_TOKEN:
-        st.error("⚠️ HF_TOKEN not found in .env file. Please add your Hugging Face API token.")
+    # Check for HF token
+    hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
+    if not hf_token or hf_token == "your_huggingface_token_here":
+        st.error("⚠️ Please configure HF_TOKEN in Streamlit secrets or .env file")
+        st.info("Get your token from: https://huggingface.co/settings/tokens")
         st.stop()
     
-    # Handle OAuth callback
-    handle_oauth_callback()
+    # Handle OAuth callback if available
+    if oauth_available:
+        query_params = st.query_params
+        if "code" in query_params:
+            try:
+                token_data = google_oauth.exchange_code_for_token(query_params["code"])
+                if "access_token" in token_data:
+                    user_info = google_oauth.get_user_info(token_data["access_token"])
+                    st.session_state.authenticated = True
+                    st.session_state.user_info = user_info
+                    st.query_params.clear()
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Authentication error: {str(e)}")
     
     # Check authentication
-    if not security.is_authenticated():
+    if not st.session_state.authenticated:
         show_login_page()
         return
     
-    # Get user info
-    user_info = security.get_user_info()
+    # Main app interface
+    user_info = st.session_state.get("user_info", {"name": "User"})
     
-    # Header with user info
+    # Header
     col1, col2 = st.columns([3, 1])
     with col1:
         st.title("🪄 AMEK AI - Professional Code Generator")
@@ -219,7 +146,8 @@ def main():
     with col2:
         st.markdown(f"**Welcome, {user_info.get('name', 'User')}!**")
         if st.button("🚪 Logout", use_container_width=True):
-            security.logout()
+            st.session_state.authenticated = False
+            st.session_state.user_info = None
             st.rerun()
     
     # Sidebar
@@ -241,10 +169,9 @@ def main():
         
         # Quick actions
         st.header("⚡ Quick Actions")
-        
         quick_prompts = [
             "Create a Python function",
-            "Debug this code",
+            "Debug this code", 
             "Optimize performance",
             "Add error handling",
             "Write unit tests"
@@ -261,9 +188,6 @@ def main():
     
     # Chat input
     if prompt := st.chat_input("Ask me anything about coding..."):
-        # Sanitize input
-        prompt = security.sanitize_input(prompt)
-        
         # Add user message
         user_message = {"role": "user", "content": prompt}
         st.session_state.messages.append(user_message)
@@ -277,7 +201,6 @@ def main():
                     model=selected_model
                 )
                 
-                # Create assistant message with metadata
                 assistant_message = {
                     "role": "assistant",
                     "content": response_content,
