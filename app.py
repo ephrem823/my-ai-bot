@@ -230,26 +230,27 @@ if __name__ == "__main__":
     """Main application function"""
     global oauth_available
     
-    # 1. Check for HF token (Checks root of secrets or config.py)
-    hf_token = st.secrets.get("HF_TOKEN") or getattr(config, 'HF_TOKEN', None)
-    if not hf_token or hf_token == "your_huggingface_token_here":
-        st.error("⚠️ HF_TOKEN not found!")
-        st.info("Add HF_TOKEN = 'your_token' to .streamlit/secrets.toml")
+    # 1. Check for HF token
+    # Looks for HF_TOKEN at the top level of secrets.toml
+    hf_token = st.secrets.get("HF_TOKEN")
+    if not hf_token:
+        st.error("⚠️ HF_TOKEN not found in secrets!")
         st.stop()
     
-    # 2. Validate OAuth configuration
-    # We check for the [auth] section you defined in your TOML
+    # 2. Validate OAuth configuration from the [auth] section
     if "auth" in st.secrets:
+        # Map the TOML keys to the variables the rest of your script uses
         client_id = st.secrets["auth"].get("client_id")
         client_secret = st.secrets["auth"].get("client_secret")
         
-        if not client_id or not client_secret:
-            st.warning("⚠️ Google OAuth keys are empty in [auth] section.")
-            oauth_available = False
-        else:
+        if client_id and client_secret:
             oauth_available = True
-    else:
-        # Fallback to config.py if secrets.toml isn't used
-        client_id = getattr(config, 'GOOGLE_CLIENT_ID', None)
-        if not client_id:
+            # Update the environment or config so google_oauth.py can see them
+            os.environ["GOOGLE_CLIENT_ID"] = client_id
+            os.environ["GOOGLE_CLIENT_SECRET"] = client_secret
+        else:
+            st.warning("⚠️ OAuth keys are missing inside the [auth] section.")
             oauth_available = False
+    else:
+        st.warning("⚠️ [auth] section not found in secrets.toml.")
+        oauth_available = False
