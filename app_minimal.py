@@ -228,7 +228,7 @@ def show_login_page():
             3. Enable Google+ API
             4. Create OAuth 2.0 credentials
             5. Add `http://localhost:8501` to authorized redirect URIs
-            6. Update your `.env` file with the credentials
+            6. Update your Streamlit secrets or `.env` file with the credentials
             """)
 
 # ============================================================================
@@ -238,9 +238,10 @@ def show_login_page():
 def main():
     """Main application function"""
     
-    # Check for required environment variables
-    if not config.HF_TOKEN:
-        st.error("⚠️ HF_TOKEN not found in .env file. Please add your Hugging Face API token.")
+    # Check for required environment variables using Streamlit secrets
+    hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
+    if not hf_token:
+        st.error("⚠️ HF_TOKEN not found in Streamlit secrets or .env file.")
         st.stop()
     
     # Handle OAuth callback
