@@ -226,3 +226,30 @@ def main():
 
 if __name__ == "__main__":
     main()
+    def main():
+    """Main application function"""
+    global oauth_available
+    
+    # 1. Check for HF token (Checks root of secrets or config.py)
+    hf_token = st.secrets.get("HF_TOKEN") or getattr(config, 'HF_TOKEN', None)
+    if not hf_token or hf_token == "your_huggingface_token_here":
+        st.error("⚠️ HF_TOKEN not found!")
+        st.info("Add HF_TOKEN = 'your_token' to .streamlit/secrets.toml")
+        st.stop()
+    
+    # 2. Validate OAuth configuration
+    # We check for the [auth] section you defined in your TOML
+    if "auth" in st.secrets:
+        client_id = st.secrets["auth"].get("client_id")
+        client_secret = st.secrets["auth"].get("client_secret")
+        
+        if not client_id or not client_secret:
+            st.warning("⚠️ Google OAuth keys are empty in [auth] section.")
+            oauth_available = False
+        else:
+            oauth_available = True
+    else:
+        # Fallback to config.py if secrets.toml isn't used
+        client_id = getattr(config, 'GOOGLE_CLIENT_ID', None)
+        if not client_id:
+            oauth_available = False
