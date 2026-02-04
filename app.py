@@ -18,7 +18,8 @@ if "authenticated" not in st.session_state:
 try:
     from google_oauth import GoogleOAuth
     google_oauth = GoogleOAuth()
-    oauth_available = google_oauth.is_configured
+    # Initial check, will be refined in main()
+    oauth_available = True 
 except Exception:
     google_oauth = None
     oauth_available = False
@@ -31,38 +32,33 @@ def display_message(message, is_user=False):
         content = message["content"]
         
         if not is_user and "```" in content:
-            # Handle code blocks
             parts = content.split("```")
             for i, part in enumerate(parts):
-                if i % 2 == 0:  # Regular text
+                if i % 2 == 0:
                     if part.strip():
                         st.markdown(part)
-                else:  # Code block
+                else:
                     lines = part.split('\n')
                     language = lines[0] if lines[0] else "text"
                     code = '\n'.join(lines[1:]) if len(lines) > 1 else part
-                    
                     if code.strip():
                         st.code(code, language=language)
         else:
             st.markdown(content)
         
-        # Show metadata for assistant messages
         if not is_user and message.get("tokens_used"):
             col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
                 if message.get("model_used"):
                     st.caption(f"Model: {message['model_used']}")
             with col2:
-                if message.get("tokens_used"):
-                    st.caption(f"Tokens: {message['tokens_used']}")
+                st.caption(f"Tokens: {message['tokens_used']}")
             with col3:
                 if message.get("processing_time"):
                     st.caption(f"Time: {message['processing_time']:.1f}s")
 
 def show_login_page():
     """Display login page with optional OAuth or guest access"""
-    
     st.markdown("""
     <div style="text-align: center; padding: 50px;">
         <h1>AMEK AI</h1>
@@ -96,9 +92,8 @@ def show_login_page():
                 </div>
                 """, unsafe_allow_html=True)
             except Exception:
-                pass
+                st.warning("Google login currently unavailable.")
         
-        # Always show guest option
         if st.button("Continue as Guest", use_container_width=True):
             st.session_state.authenticated = True
             st.session_state.user_info = {"name": "Guest User", "email": "guest@example.com"}
@@ -109,26 +104,29 @@ def show_login_page():
 
 def main():
     """Main application function"""
-    
-    # Use global oauth_available variable
     global oauth_available
     
-    # Check for HF token
-    hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
-    if not hf_token or hf_token == "your_huggingface_token_here":
-        st.error("⚠️ Please configure HF_TOKEN in Streamlit secrets or .env file")
-        st.info("Get your token from: https://huggingface.co/settings/tokens")
+    # 1. Check for HF token
+    hf_token = st.secrets.get("HF_TOKEN") or getattr(config, 'HF_TOKEN', None)
+    if not hf_token:
+        st.error("⚠️ HF_TOKEN not found in secrets!")
         st.stop()
     
-    # Validate OAuth configuration if OAuth is being used
-    if oauth_available:
-        client_id = st.secrets.get("GOOGLE_CLIENT_ID") or config.GOOGLE_CLIENT_ID
-        client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET") or config.GOOGLE_CLIENT_SECRET
-        if not client_id or not client_secret:
-            st.warning("⚠️ Google OAuth not properly configured. OAuth features disabled.")
+    # 2. Validate OAuth configuration from the [auth] section
+    if "auth" in st.secrets:
+        client_id = st.secrets["auth"].get("client_id")
+        client_secret = st.secrets["auth"].get("client_secret")
+        
+        if client_id and client_secret:
+            oauth_available = True
+            os.environ["GOOGLE_CLIENT_ID"] = client_id
+            os.environ["GOOGLE_CLIENT_SECRET"] = client_secret
+        else:
             oauth_available = False
+    else:
+        oauth_available = False
     
-    # Handle OAuth callback if available
+    # Handle OAuth callback
     if oauth_available:
         query_params = st.query_params
         if "code" in query_params:
@@ -143,70 +141,45 @@ def main():
             except Exception as e:
                 st.error(f"Authentication error: {str(e)}")
     
-    # Check authentication
     if not st.session_state.authenticated:
         show_login_page()
         return
-    
-    # Main app interface
+
+    # Authenticated UI
     user_info = st.session_state.get("user_info", {"name": "User"})
-    
-    # Header
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.title("AMEK AI - Professional Code Generator")
-        st.markdown("*Your intelligent coding companion*")
+        st.title("AMEK AI")
+        st.markdown("*Professional Code Generator*")
     with col2:
-        st.markdown(f"**Welcome, {user_info.get('name', 'User')}!**")
-        if st.button("Logout", use_container_width=True):
+        st.markdown(f"**Hi, {user_info.get('name', 'User')}!**")
+        if st.button("Logout"):
             st.session_state.authenticated = False
             st.session_state.user_info = None
             st.rerun()
-    
+
     # Sidebar
     with st.sidebar:
-        st.header("Controls")
-        
-        if st.button("New Chat", use_container_width=True):
+        st.header("Settings")
+        if st.button("Clear Chat"):
             st.session_state.messages = []
             st.rerun()
         
-        st.divider()
-        
-        # Model selection
         selected_model = st.selectbox(
             "AI Model",
             options=list(config.MODELS.values()),
             index=0
         )
-        
-        # Quick actions
-        st.header("Quick Actions")
-        quick_prompts = [
-            "Create a Python function",
-            "Debug this code", 
-            "Optimize performance",
-            "Add error handling",
-            "Write unit tests"
-        ]
-        
-        for prompt in quick_prompts:
-            if st.button(prompt, use_container_width=True):
-                st.session_state.messages.append({"role": "user", "content": prompt})
-                st.rerun()
-    
-    # Display chat messages
+
+    # Chat
     for message in st.session_state.messages:
         display_message(message, is_user=(message["role"] == "user"))
     
-    # Chat input
-    if prompt := st.chat_input("Ask me anything about coding..."):
-        # Add user message
+    if prompt := st.chat_input("Ask me anything..."):
         user_message = {"role": "user", "content": prompt}
         st.session_state.messages.append(user_message)
         display_message(user_message, is_user=True)
         
-        # Generate AI response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 response_content, tokens_used, processing_time = generate_ai_response(
@@ -217,40 +190,12 @@ def main():
                 assistant_message = {
                     "role": "assistant",
                     "content": response_content,
+                    "tokens_used": tokens_used,
                     "processing_time": processing_time,
                     "model_used": selected_model.split("/")[-1]
                 }
-                
                 st.session_state.messages.append(assistant_message)
                 display_message(assistant_message)
 
 if __name__ == "__main__":
     main()
-    def main():
-    """Main application function"""
-    global oauth_available
-    
-    # 1. Check for HF token
-    # Looks for HF_TOKEN at the top level of secrets.toml
-    hf_token = st.secrets.get("HF_TOKEN")
-    if not hf_token:
-        st.error("⚠️ HF_TOKEN not found in secrets!")
-        st.stop()
-    
-    # 2. Validate OAuth configuration from the [auth] section
-    if "auth" in st.secrets:
-        # Map the TOML keys to the variables the rest of your script uses
-        client_id = st.secrets["auth"].get("client_id")
-        client_secret = st.secrets["auth"].get("client_secret")
-        
-        if client_id and client_secret:
-            oauth_available = True
-            # Update the environment or config so google_oauth.py can see them
-            os.environ["GOOGLE_CLIENT_ID"] = client_id
-            os.environ["GOOGLE_CLIENT_SECRET"] = client_secret
-        else:
-            st.warning("⚠️ OAuth keys are missing inside the [auth] section.")
-            oauth_available = False
-    else:
-        st.warning("⚠️ [auth] section not found in secrets.toml.")
-        oauth_available = False
