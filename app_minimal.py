@@ -174,7 +174,7 @@ def handle_oauth_callback():
         st.error(f"Authentication cancelled: {query_params.get('error', 'Unknown error')}")
 
 def show_login_page():
-    """Display login page with Google OAuth"""
+    """Display login page with Google OAuth or skip authentication"""
     st.markdown("""
     <div style="text-align: center; padding: 50px;">
         <h1>🪄 AMEK AI</h1>
@@ -220,16 +220,21 @@ def show_login_page():
             st.markdown("<br><p style='text-align: center; color: #666; font-size: 14px;'>Secure authentication powered by Google OAuth 2.0</p>", unsafe_allow_html=True)
             
         except ValueError as e:
-            st.error(f"⚠️ OAuth Configuration Error: {str(e)}")
+            st.warning(f"⚠️ OAuth not configured: {str(e)}")
             st.info("""
-            **To fix this:**
-            1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-            2. Create a new project or select existing one
-            3. Enable Google+ API
-            4. Create OAuth 2.0 credentials
-            5. Add `http://localhost:8501` to authorized redirect URIs
-            6. Update your Streamlit secrets or `.env` file with the credentials
+            **OAuth is not configured. You can:**
+            1. **Continue without authentication** (click button below)
+            2. **Set up Google OAuth** by following these steps:
+               - Go to [Google Cloud Console](https://console.cloud.google.com/)
+               - Create OAuth 2.0 credentials
+               - Update your `.env` file with real credentials
             """)
+            
+            if st.button("🚀 Continue Without Authentication", use_container_width=True):
+                # Set up a basic session without OAuth
+                st.session_state.authenticated = True
+                st.session_state.user_info = {"name": "Guest User", "email": "guest@example.com"}
+                st.rerun()
 
 # ============================================================================
 # MAIN APPLICATION
