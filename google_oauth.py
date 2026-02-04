@@ -14,6 +14,10 @@ class GoogleOAuth:
     
     def get_auth_url(self) -> str:
         """Generate Google OAuth authorization URL"""
+        # Check if credentials are properly configured
+        if self.client_id == 'your_google_client_id' or not self.client_id:
+            raise ValueError("Google OAuth not configured. Please set GOOGLE_CLIENT_ID in .env file")
+            
         params = {
             'client_id': self.client_id,
             'redirect_uri': self.redirect_uri,
