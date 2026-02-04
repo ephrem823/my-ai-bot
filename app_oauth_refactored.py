@@ -1,46 +1,24 @@
 import streamlit as st
 import time
-from typing import Optional, Tuple
+from google_oauth import GoogleOAuth
+from security import Security
+import config
 
-# Import your custom modules (these need to be created)
-from config import config
-from auth import google_oauth, security
-from ai import ai_manager
+# Page config
+st.set_page_config(page_title="AMEK AI", page_icon="🪄", layout="wide")
+
+# Initialize components
+google_oauth = GoogleOAuth()
+security = Security()
 
 # Initialize session state
-if "messages" not in st.session_state:
+if 'messages' not in st.session_state:
     st.session_state.messages = []
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
 
-# ============================================================================
-# AI RESPONSE GENERATION
-# ============================================================================
-
-def generate_ai_response(prompt: str, context: str = "", model: str = None) -> Tuple[str, int, float]:
-    """Generate AI response with error handling and fallback"""
-    start_time = time.time()
-    
-    try:
-        # Use AI manager to generate response
-        response = ai_manager.generate_response(
-            prompt=prompt,
-            context=context,
-            model=model or config.DEFAULT_MODEL
-        )
-        
-        processing_time = time.time() - start_time
-        return response.get("content", ""), response.get("tokens_used", 0), processing_time
-        
-    except Exception as e:
-        # Fallback to backup if available
-        if hasattr(ai_manager, 'use_backup') and ai_manager.use_backup and ai_manager.backup_client:
-            ai_manager.switch_to_backup()
-            return generate_ai_response(prompt, context, model)
-        
-        processing_time = time.time() - start_time
-        error_msg = f"I apologize, but I'm experiencing technical difficulties. Please try again in a moment.\n\nError: {str(e)}"
-        return error_msg, 0, processing_time
+def generate_ai_response(prompt: str, model: str = None) -> tuple:
+    """Generate AI response (placeholder implementation)"""
+    # Your existing AI response logic here
+    return "AI response placeholder", 100, 1.5
 
 def display_message(message: dict, is_user: bool = False):
     """Display a chat message with proper formatting"""
@@ -48,17 +26,15 @@ def display_message(message: dict, is_user: bool = False):
         if is_user:
             st.markdown(message["content"])
         else:
-            # Display AI response with code highlighting
             content = message["content"]
             
-            # Check if content contains code blocks
             if "```" in content:
                 parts = content.split("```")
                 for i, part in enumerate(parts):
-                    if i % 2 == 0:  # Regular text
+                    if i % 2 == 0:
                         if part.strip():
                             st.markdown(part)
-                    else:  # Code block
+                    else:
                         lines = part.split('\n')
                         language = lines[0] if lines[0] else "text"
                         code = '\n'.join(lines[1:]) if len(lines) > 1 else part
@@ -68,7 +44,6 @@ def display_message(message: dict, is_user: bool = False):
             else:
                 st.markdown(content)
             
-            # Show metadata
             if message.get("tokens_used") or message.get("processing_time"):
                 col1, col2, col3 = st.columns([2, 1, 1])
                 with col1:
@@ -81,29 +56,21 @@ def display_message(message: dict, is_user: bool = False):
                     if message.get("processing_time"):
                         st.caption(f"⏱️ {message['processing_time']:.1f}s")
 
-# ============================================================================
-# AUTHENTICATION FUNCTIONS
-# ============================================================================
-
 def handle_oauth_callback():
     """Handle OAuth callback from Google"""
     query_params = st.query_params
     
     if "code" in query_params:
         try:
-            # Exchange code for token
             token_data = google_oauth.exchange_code_for_token(query_params["code"])
             
             if "access_token" in token_data:
-                # Get user info
                 user_info = google_oauth.get_user_info(token_data["access_token"])
                 
-                # Store in session
                 st.session_state.authenticated = True
                 st.session_state.user_info = user_info
                 st.session_state.access_token = token_data["access_token"]
                 
-                # Clear URL parameters
                 st.query_params.clear()
                 st.rerun()
             else:
@@ -156,33 +123,22 @@ def show_login_page():
             </a>
         </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown("<br><p style='text-align: center; color: #666; font-size: 14px;'>Secure authentication powered by Google OAuth 2.0</p>", unsafe_allow_html=True)
-
-# ============================================================================
-# MAIN APPLICATION
-# ============================================================================
 
 def main():
     """Main application function"""
     
-    # Check for required environment variables
     if not config.HF_TOKEN:
         st.error("⚠️ HF_TOKEN not found in .env file. Please add your Hugging Face API token.")
         st.stop()
     
-    # Handle OAuth callback
     handle_oauth_callback()
     
-    # Check authentication
     if not security.is_authenticated():
         show_login_page()
         return
     
-    # Get user info
     user_info = security.get_user_info()
     
-    # Header with user info
     col1, col2 = st.columns([3, 1])
     with col1:
         st.title("🪄 AMEK AI - Professional Code Generator")
@@ -193,7 +149,6 @@ def main():
             security.logout()
             st.rerun()
     
-    # Sidebar
     with st.sidebar:
         st.header("🎛️ Controls")
         
@@ -203,14 +158,12 @@ def main():
         
         st.divider()
         
-        # Model selection
         selected_model = st.selectbox(
             "🤖 AI Model",
             options=list(config.MODELS.values()),
             index=0
         )
         
-        # Quick actions
         st.header("⚡ Quick Actions")
         
         quick_prompts = [
@@ -226,21 +179,16 @@ def main():
                 st.session_state.messages.append({"role": "user", "content": prompt})
                 st.rerun()
     
-    # Display chat messages
     for message in st.session_state.messages:
         display_message(message, is_user=(message["role"] == "user"))
     
-    # Chat input
     if prompt := st.chat_input("Ask me anything about coding..."):
-        # Sanitize input
         prompt = security.sanitize_input(prompt)
         
-        # Add user message
         user_message = {"role": "user", "content": prompt}
         st.session_state.messages.append(user_message)
         display_message(user_message, is_user=True)
         
-        # Generate AI response
         with st.chat_message("assistant"):
             with st.spinner("🤔 Thinking..."):
                 response_content, tokens_used, processing_time = generate_ai_response(
@@ -248,7 +196,6 @@ def main():
                     model=selected_model
                 )
                 
-                # Create assistant message with metadata
                 assistant_message = {
                     "role": "assistant",
                     "content": response_content,
