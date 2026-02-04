@@ -20,6 +20,7 @@ try:
     google_oauth = GoogleOAuth()
     oauth_available = google_oauth.is_configured
 except Exception:
+    google_oauth = None
     oauth_available = False
 
 def display_message(message, is_user=False):
@@ -61,7 +62,6 @@ def display_message(message, is_user=False):
 
 def show_login_page():
     """Display login page with optional OAuth or guest access"""
-    global oauth_available
     
     st.markdown("""
     <div style="text-align: center; padding: 50px;">
