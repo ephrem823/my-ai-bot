@@ -217,7 +217,6 @@ def main():
                 assistant_message = {
                     "role": "assistant",
                     "content": response_content,
-                    "tokens_used": tokens_used,
                     "processing_time": processing_time,
                     "model_used": selected_model.split("/")[-1]
                 }
