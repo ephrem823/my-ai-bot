@@ -36,7 +36,7 @@ def generate_ai_response(prompt, model=None):
         
         # Make API request
         response = requests.post(
-            f"https://api-inference.huggingface.co/models/{model}",
+            f"https://router.huggingface.co/models/{model}",
             headers=headers,
             json=payload,
             timeout=30
