@@ -2,3 +2,4 @@ streamlit
 bleach
 python-dotenv
 requests
+huggingface_hub
