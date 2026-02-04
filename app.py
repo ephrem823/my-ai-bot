@@ -110,6 +110,9 @@ def show_login_page():
 def main():
     """Main application function"""
     
+    # Use global oauth_available variable
+    global oauth_available
+    
     # Check for HF token
     hf_token = st.secrets.get("HF_TOKEN") or config.HF_TOKEN
     if not hf_token or hf_token == "your_huggingface_token_here":
