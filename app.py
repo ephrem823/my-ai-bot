@@ -117,6 +117,14 @@ def main():
         st.info("Get your token from: https://huggingface.co/settings/tokens")
         st.stop()
     
+    # Validate OAuth configuration if OAuth is being used
+    if oauth_available:
+        client_id = st.secrets.get("GOOGLE_CLIENT_ID") or config.GOOGLE_CLIENT_ID
+        client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET") or config.GOOGLE_CLIENT_SECRET
+        if not client_id or not client_secret:
+            st.warning("⚠️ Google OAuth not properly configured. OAuth features disabled.")
+            oauth_available = False
+    
     # Handle OAuth callback if available
     if oauth_available:
         query_params = st.query_params
