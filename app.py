@@ -96,7 +96,7 @@ def show_login_page():
                 </div>
                 """, unsafe_allow_html=True)
             except Exception:
-                oauth_available = False
+                pass
         
         # Always show guest option
         if st.button("🚀 Continue as Guest", use_container_width=True):
