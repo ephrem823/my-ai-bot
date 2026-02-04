@@ -1,6 +1,4 @@
 streamlit
-huggingface_hub
 bleach
 python-dotenv
 requests
-PyJWT

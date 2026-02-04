@@ -2,10 +2,10 @@ import streamlit as st
 import time
 from typing import Optional, Tuple
 
-# Import your custom modules (these need to be created)
-from config import config
-from auth import google_oauth, security
-from ai import ai_manager
+# Import your custom modules
+import config
+import google_oauth
+import security
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -22,22 +22,81 @@ def generate_ai_response(prompt: str, context: str = "", model: str = None) -> T
     start_time = time.time()
     
     try:
-        # Use AI manager to generate response
-        response = ai_manager.generate_response(
-            prompt=prompt,
-            context=context,
-            model=model or config.DEFAULT_MODEL
-        )
+        # Simple response for now - replace with actual AI integration
+        response_content = f"I received your request: {prompt}\n\nThis is a placeholder response. Please integrate with your import streamlit as st
+import time
+import requests
+from typing import Dict, List, Optional
+
+# Import local modules
+import config
+from security import Security
+from google_oauth import GoogleOAuth
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# Initialize components
+security = Security()
+google_oauth = GoogleOAuth()
+
+# Initialize session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# ============================================================================
+# AI RESPONSE FUNCTIONS
+# ============================================================================
+
+def generate_ai_response(prompt: str, model: str = "codellama/CodeLlama-7b-Instruct-hf") -> tuple[str, int, float]:
+    """Generate AI response using Hugging Face API"""
+    start_time = time.time()
+    
+    try:
+        # Prepare the API request
+        headers = {
+            "Authorization": f"Bearer {config.HF_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Create a focused prompt for code generation
+        system_prompt = "You are a professional code assistant. Provide clear, efficient, and well-documented code solutions."
+        full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+        
+        payload = {
+            "inputs": full_prompt,
+            "parameters": {
+                "max_new_tokens": 500,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "do_sample": True,
+                "return_full_text": False
+            }
+        }
+        
+        # Make API request
+        api_url = f"https://api-inference.huggingface.co/models/{model}"
+        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                response_content = result[0].get("generated_text", "")
+            else:
+                response_content = "I apologize, but I couldn't generate a response. Please try again."
+        else:
+            response_content = f"I'm currently experiencing high demand. Please try again in a moment. (Status: {response.status_code})"
         
         processing_time = time.time() - start_time
-        return response.get("content", ""), response.get("tokens_used", 0), processing_time
+        return response_content, 50, processing_time
         
     except Exception as e:
-        # Fallback to backup if available
-        if hasattr(ai_manager, 'use_backup') and ai_manager.use_backup and ai_manager.backup_client:
-            ai_manager.switch_to_backup()
-            return generate_ai_response(prompt, context, model)
+        processing_time = time.time() - start_time
+        error_msg = f"I apologize, but I'm experiencing technical difficulties. Please try again in a moment.\n\nError: {str(e)}"
+        return error_msg, 0, processing_time
         
+    except Exception as e:
         processing_time = time.time() - start_time
         error_msg = f"I apologize, but I'm experiencing technical difficulties. Please try again in a moment.\n\nError: {str(e)}"
         return error_msg, 0, processing_time
