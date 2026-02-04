@@ -80,7 +80,6 @@ def show_login_page():
     
     with col2:
         if st.button("🚀 Continue", use_container_width=True):
-            # Set up a basic session
             st.session_state.authenticated = True
             st.session_state.user_info = {"name": "User", "email": "user@example.com"}
             st.rerun()
